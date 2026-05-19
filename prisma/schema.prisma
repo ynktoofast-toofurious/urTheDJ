@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model PartySession {
+  sessionId      String        @id
+  partyName      String
+  createdBy      String        @default("DJ")
+  status         String        @default("draft")
+  /// requestId of the SongRequest currently playing (no FK to avoid circular dep)
+  currentSongId  String?
+  partyStyle     String?
+  requestsLocked Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  startedAt      DateTime?
+  endedAt        DateTime?
+  requests       SongRequest[]
+
+  @@map("party_sessions")
+}
+
+model SongRequest {
+  requestId            String       @id
+  sessionId            String
+  session              PartySession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  songTitle            String
+  artistName           String
+  albumName            String?
+  appleMusicId         String?
+  artworkUrl           String?
+  durationMs           Int?
+  bpm                  Int?
+  genre                String?
+  style                String?
+  energyLevel          String?
+  priorityScore        Int          @default(0)
+  requestedBy          String       @default("Guest")
+  status               String       @default("pending")
+  createdAt            DateTime     @default(now())
+  playedAt             DateTime?
+  sourceProvider       String
+  manualPriority       Int          @default(0)
+  duplicateOfRequestId String?
+
+  @@map("song_requests")
+}
