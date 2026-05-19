@@ -304,51 +304,38 @@ export function searchSongs(query: string) {
 }
 
 export async function searchAppleMusic(query: string) {
-  const developerToken = process.env.APPLE_MUSIC_DEVELOPER_TOKEN;
-  const storefront = process.env.APPLE_MUSIC_STOREFRONT ?? 'us';
-
-  if (!developerToken) return searchSongs(query);
-
   const term = encodeURIComponent(query);
   const response = await fetch(
-    `https://api.music.apple.com/v1/catalog/${storefront}/search?term=${term}&types=songs&limit=10`,
-    { headers: { Authorization: `Bearer ${developerToken}` } }
+    `https://itunes.apple.com/search?term=${term}&media=music&entity=song&limit=10`
   );
 
   if (!response.ok) return searchSongs(query);
 
   const data = (await response.json()) as {
-    results?: {
-      songs?: {
-        data?: Array<{
-          id: string;
-          attributes?: {
-            name?: string;
-            artistName?: string;
-            albumName?: string;
-            artwork?: { url?: string };
-            durationInMillis?: number;
-          };
-        }>;
-      };
-    };
+    resultCount?: number;
+    results?: Array<{
+      trackId?: number;
+      trackName?: string;
+      artistName?: string;
+      collectionName?: string;
+      artworkUrl100?: string;
+      trackTimeMillis?: number;
+      primaryGenreName?: string;
+    }>;
   };
 
-  const songs = data.results?.songs?.data ?? [];
-  if (!songs.length) return searchSongs(query);
+  const results = data.results ?? [];
+  if (!results.length) return searchSongs(query);
 
-  return songs.map((song, index) => ({
-    songTitle: song.attributes?.name ?? `Result ${index + 1}`,
-    artistName: song.attributes?.artistName ?? 'Apple Music',
-    albumName: song.attributes?.albumName,
-    appleMusicId: song.id,
-    artworkUrl: song.attributes?.artwork?.url
-      ?.replace('{w}', '400')
-      .replace('{h}', '400')
-      .replace('{f}', 'jpg'),
-    durationMs: song.attributes?.durationInMillis,
+  return results.map((track, index) => ({
+    songTitle: track.trackName ?? `Result ${index + 1}`,
+    artistName: track.artistName ?? 'Unknown Artist',
+    albumName: track.collectionName,
+    appleMusicId: track.trackId?.toString(),
+    artworkUrl: track.artworkUrl100?.replace('100x100bb', '400x400bb'),
+    durationMs: track.trackTimeMillis,
     bpm: 90 + index * 4,
-    genre: 'Apple Music',
+    genre: track.primaryGenreName ?? 'Music',
     style: 'catalog',
     energyLevel: 'medium' as EnergyLevel,
     sourceProvider: 'apple-music' satisfies MusicProvider
