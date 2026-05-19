@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
-import type { PartySession as DbSession, SongRequest as DbRequest } from '@/generated/prisma/client/client';
-import { prisma } from './prisma';
+import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { dynamo, SESSIONS_TABLE, REQUESTS_TABLE } from './dynamo';
 import { catalog } from './catalog';
 import { emitPartyUpdate } from './event-bus';
 import type {
@@ -14,6 +14,44 @@ import type {
   SessionStatus,
   SongRequest
 } from './types';
+
+// ---------- DB item types ----------
+
+interface DbSession {
+  sessionId: string;
+  partyName: string;
+  createdBy: string;
+  status: string;
+  currentSongId?: string;
+  partyStyle?: string;
+  requestsLocked: boolean;
+  createdAt: string;
+  startedAt?: string;
+  endedAt?: string;
+}
+
+interface DbRequest {
+  requestId: string;
+  sessionId: string;
+  songTitle: string;
+  artistName: string;
+  albumName?: string;
+  appleMusicId?: string;
+  artworkUrl?: string;
+  durationMs?: number;
+  bpm?: number;
+  genre?: string;
+  style?: string;
+  energyLevel?: string;
+  priorityScore: number;
+  requestedBy: string;
+  status: string;
+  createdAt: string;
+  playedAt?: string;
+  sourceProvider: string;
+  manualPriority: number;
+  duplicateOfRequestId?: string;
+}
 
 // ---------- Input types ----------
 
@@ -33,7 +71,7 @@ type QueueActionInput = {
   requestId: string;
 };
 
-// ---------- Mappers (DB row → domain type) ----------
+// ---------- Mappers (DB item → domain type) ----------
 
 function mapSession(s: DbSession): PartySession {
   return {
@@ -41,12 +79,12 @@ function mapSession(s: DbSession): PartySession {
     partyName: s.partyName,
     createdBy: s.createdBy,
     status: s.status as SessionStatus,
-    currentSongId: s.currentSongId ?? undefined,
-    partyStyle: s.partyStyle ?? undefined,
+    currentSongId: s.currentSongId,
+    partyStyle: s.partyStyle,
     requestsLocked: s.requestsLocked,
-    createdAt: s.createdAt.toISOString(),
-    startedAt: s.startedAt?.toISOString(),
-    endedAt: s.endedAt?.toISOString()
+    createdAt: s.createdAt,
+    startedAt: s.startedAt,
+    endedAt: s.endedAt
   };
 }
 
@@ -56,22 +94,22 @@ function mapRequest(r: DbRequest): SongRequest {
     sessionId: r.sessionId,
     songTitle: r.songTitle,
     artistName: r.artistName,
-    albumName: r.albumName ?? undefined,
-    appleMusicId: r.appleMusicId ?? undefined,
-    artworkUrl: r.artworkUrl ?? undefined,
-    durationMs: r.durationMs ?? undefined,
-    bpm: r.bpm ?? undefined,
-    genre: r.genre ?? undefined,
-    style: r.style ?? undefined,
+    albumName: r.albumName,
+    appleMusicId: r.appleMusicId,
+    artworkUrl: r.artworkUrl,
+    durationMs: r.durationMs,
+    bpm: r.bpm,
+    genre: r.genre,
+    style: r.style,
     energyLevel: (r.energyLevel ?? 'medium') as EnergyLevel,
     priorityScore: r.priorityScore,
     requestedBy: r.requestedBy,
     status: r.status as RequestStatus,
-    createdAt: r.createdAt.toISOString(),
-    playedAt: r.playedAt?.toISOString(),
+    createdAt: r.createdAt,
+    playedAt: r.playedAt,
     sourceProvider: r.sourceProvider as MusicProvider,
     manualPriority: r.manualPriority,
-    duplicateOfRequestId: r.duplicateOfRequestId ?? undefined
+    duplicateOfRequestId: r.duplicateOfRequestId
   };
 }
 
@@ -171,26 +209,38 @@ function byPlayedDesc(a: SongRequest, b: SongRequest) {
 // ---------- DB helpers ----------
 
 async function fetchSessionOrThrow(sessionId: string): Promise<DbSession> {
-  const s = await prisma.partySession.findUnique({ where: { sessionId } });
-  if (!s) throw new Error(`Party session ${sessionId} not found`);
-  return s;
+  const result = await dynamo.send(new GetCommand({ TableName: SESSIONS_TABLE, Key: { sessionId } }));
+  if (!result.Item) throw new Error(`Party session ${sessionId} not found`);
+  return result.Item as unknown as DbSession;
 }
 
 async function fetchRequestOrThrow(requestId: string): Promise<DbRequest> {
-  const r = await prisma.songRequest.findUnique({ where: { requestId } });
-  if (!r) throw new Error(`Song request ${requestId} not found`);
-  return r;
+  const result = await dynamo.send(new GetCommand({ TableName: REQUESTS_TABLE, Key: { requestId } }));
+  if (!result.Item) throw new Error(`Song request ${requestId} not found`);
+  return result.Item as unknown as DbRequest;
+}
+
+async function fetchRequestsBySession(sessionId: string): Promise<DbRequest[]> {
+  const result = await dynamo.send(
+    new QueryCommand({
+      TableName: REQUESTS_TABLE,
+      IndexName: 'sessionId-index',
+      KeyConditionExpression: 'sessionId = :sid',
+      ExpressionAttributeValues: { ':sid': sessionId }
+    })
+  );
+  return (result.Items ?? []) as unknown as DbRequest[];
 }
 
 async function refreshQueueState(sessionId: string): Promise<AdminDashboardModel> {
-  const dbSession = await prisma.partySession.findUnique({
-    where: { sessionId },
-    include: { requests: true }
-  });
-  if (!dbSession) throw new Error(`Party session ${sessionId} not found`);
+  const [sessionResult, requestRows] = await Promise.all([
+    dynamo.send(new GetCommand({ TableName: SESSIONS_TABLE, Key: { sessionId } })),
+    fetchRequestsBySession(sessionId)
+  ]);
+  if (!sessionResult.Item) throw new Error(`Party session ${sessionId} not found`);
 
-  const session = mapSession(dbSession);
-  const allRequests = dbSession.requests.map(mapRequest);
+  const session = mapSession(sessionResult.Item as unknown as DbSession);
+  const allRequests = requestRows.map(mapRequest);
   const currentSong = session.currentSongId
     ? allRequests.find((r) => r.requestId === session.currentSongId)
     : undefined;
@@ -215,30 +265,32 @@ async function refreshQueueState(sessionId: string): Promise<AdminDashboardModel
 
 export async function createPartySession(input: SessionInput) {
   const sessionId = randomUUID();
-  await prisma.partySession.create({
-    data: {
-      sessionId,
-      partyName: input.partyName.trim(),
-      createdBy: input.createdBy?.trim() || 'DJ',
-      status: 'draft',
-      partyStyle: input.partyStyle?.trim() ?? null,
-      requestsLocked: false
-    }
-  });
+  const item: DbSession = {
+    sessionId,
+    partyName: input.partyName.trim(),
+    createdBy: input.createdBy?.trim() || 'DJ',
+    status: 'draft',
+    partyStyle: input.partyStyle?.trim(),
+    requestsLocked: false,
+    createdAt: new Date().toISOString()
+  };
+  await dynamo.send(new PutCommand({ TableName: SESSIONS_TABLE, Item: item }));
   const created = await refreshQueueState(sessionId);
   emitPartyUpdate(sessionId);
   return created;
 }
 
 export async function startPartySession(sessionId: string) {
-  const session = await fetchSessionOrThrow(sessionId);
-  await prisma.partySession.update({
-    where: { sessionId },
-    data: {
-      status: 'active',
-      startedAt: session.startedAt ?? new Date()
-    }
-  });
+  await fetchSessionOrThrow(sessionId);
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: SESSIONS_TABLE,
+      Key: { sessionId },
+      UpdateExpression: 'SET #s = :active, startedAt = if_not_exists(startedAt, :now)',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':active': 'active', ':now': new Date().toISOString() }
+    })
+  );
   const started = await refreshQueueState(sessionId);
   emitPartyUpdate(sessionId);
   return started;
@@ -246,7 +298,15 @@ export async function startPartySession(sessionId: string) {
 
 export async function pausePartySession(sessionId: string) {
   await fetchSessionOrThrow(sessionId);
-  await prisma.partySession.update({ where: { sessionId }, data: { status: 'paused' } });
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: SESSIONS_TABLE,
+      Key: { sessionId },
+      UpdateExpression: 'SET #s = :paused',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':paused': 'paused' }
+    })
+  );
   const paused = await refreshQueueState(sessionId);
   emitPartyUpdate(sessionId);
   return paused;
@@ -254,10 +314,15 @@ export async function pausePartySession(sessionId: string) {
 
 export async function endPartySession(sessionId: string) {
   await fetchSessionOrThrow(sessionId);
-  await prisma.partySession.update({
-    where: { sessionId },
-    data: { status: 'ended', endedAt: new Date() }
-  });
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: SESSIONS_TABLE,
+      Key: { sessionId },
+      UpdateExpression: 'SET #s = :ended, endedAt = :now',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':ended': 'ended', ':now': new Date().toISOString() }
+    })
+  );
   const ended = await refreshQueueState(sessionId);
   emitPartyUpdate(sessionId);
   return ended;
@@ -265,7 +330,14 @@ export async function endPartySession(sessionId: string) {
 
 export async function lockPartyRequests(sessionId: string, locked: boolean) {
   await fetchSessionOrThrow(sessionId);
-  await prisma.partySession.update({ where: { sessionId }, data: { requestsLocked: locked } });
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: SESSIONS_TABLE,
+      Key: { sessionId },
+      UpdateExpression: 'SET requestsLocked = :locked',
+      ExpressionAttributeValues: { ':locked': locked }
+    })
+  );
   const result = await refreshQueueState(sessionId);
   emitPartyUpdate(sessionId);
   return result;
@@ -286,7 +358,7 @@ export async function getGuestView(sessionId: string): Promise<GuestViewModel> {
 }
 
 export async function listRequests(sessionId: string) {
-  const rows = await prisma.songRequest.findMany({ where: { sessionId } });
+  const rows = await fetchRequestsBySession(sessionId);
   return rows.map(mapRequest);
 }
 
@@ -343,14 +415,16 @@ export async function searchAppleMusic(query: string) {
 }
 
 export async function requestSong(input: SongRequestInput) {
-  const dbSession = await prisma.partySession.findUnique({ where: { sessionId: input.sessionId } });
-  if (!dbSession) throw new Error(`Party session ${input.sessionId} not found`);
-  const session = mapSession(dbSession);
+  const sessionResult = await dynamo.send(
+    new GetCommand({ TableName: SESSIONS_TABLE, Key: { sessionId: input.sessionId } })
+  );
+  if (!sessionResult.Item) throw new Error(`Party session ${input.sessionId} not found`);
+  const session = mapSession(sessionResult.Item as unknown as DbSession);
 
   if (session.status === 'ended') throw new Error('This party has ended. Requests are closed.');
   if (session.requestsLocked) throw new Error('Requests are locked for this party.');
 
-  const existingRows = await prisma.songRequest.findMany({ where: { sessionId: input.sessionId } });
+  const existingRows = await fetchRequestsBySession(input.sessionId);
   const existing = existingRows.map(mapRequest);
 
   const currentSong = session.currentSongId
@@ -363,31 +437,7 @@ export async function requestSong(input: SongRequestInput) {
   const priorityScore = computePriorityScore(session, currentSong, input.song, createdAt, 0, Boolean(duplicate));
   const requestId = randomUUID();
 
-  await prisma.songRequest.create({
-    data: {
-      requestId,
-      sessionId: input.sessionId,
-      songTitle: input.song.songTitle,
-      artistName: input.song.artistName,
-      albumName: input.song.albumName ?? null,
-      appleMusicId: input.song.appleMusicId ?? null,
-      artworkUrl: input.song.artworkUrl ?? null,
-      durationMs: input.song.durationMs ?? null,
-      bpm: input.song.bpm ?? null,
-      genre: input.song.genre ?? null,
-      style: input.song.style ?? null,
-      energyLevel: input.song.energyLevel ?? getEnergyLevel(input.song.bpm),
-      priorityScore,
-      requestedBy: input.requestedBy?.trim() || 'Guest',
-      status: duplicate ? 'rejected' : 'pending',
-      createdAt: new Date(createdAt),
-      sourceProvider: input.song.sourceProvider,
-      manualPriority: 0,
-      duplicateOfRequestId: duplicate?.requestId ?? null
-    }
-  });
-
-  const request: SongRequest = {
+  const item: DbRequest = {
     requestId,
     sessionId: input.sessionId,
     songTitle: input.song.songTitle,
@@ -409,13 +459,22 @@ export async function requestSong(input: SongRequestInput) {
     duplicateOfRequestId: duplicate?.requestId
   };
 
+  await dynamo.send(new PutCommand({ TableName: REQUESTS_TABLE, Item: item }));
   emitPartyUpdate(input.sessionId);
-  return { request, duplicate };
+  return { request: mapRequest(item), duplicate };
 }
 
 export async function approveRequest({ requestId }: QueueActionInput) {
   const r = await fetchRequestOrThrow(requestId);
-  await prisma.songRequest.update({ where: { requestId }, data: { status: 'approved' } });
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: REQUESTS_TABLE,
+      Key: { requestId },
+      UpdateExpression: 'SET #s = :approved',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':approved': 'approved' }
+    })
+  );
   const state = await refreshQueueState(r.sessionId);
   emitPartyUpdate(r.sessionId);
   return state;
@@ -423,7 +482,15 @@ export async function approveRequest({ requestId }: QueueActionInput) {
 
 export async function rejectRequest({ requestId }: QueueActionInput) {
   const r = await fetchRequestOrThrow(requestId);
-  await prisma.songRequest.update({ where: { requestId }, data: { status: 'rejected' } });
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: REQUESTS_TABLE,
+      Key: { requestId },
+      UpdateExpression: 'SET #s = :rejected',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':rejected': 'rejected' }
+    })
+  );
   const state = await refreshQueueState(r.sessionId);
   emitPartyUpdate(r.sessionId);
   return state;
@@ -433,15 +500,34 @@ export async function markRequestPlaying({ requestId }: QueueActionInput) {
   const r = await fetchRequestOrThrow(requestId);
   const s = await fetchSessionOrThrow(r.sessionId);
 
-  await prisma.$transaction([
-    prisma.songRequest.update({ where: { requestId }, data: { status: 'playing' } }),
-    prisma.partySession.update({
-      where: { sessionId: r.sessionId },
-      data: {
-        currentSongId: requestId,
-        ...(s.status === 'draft' && { status: 'active' })
-      }
-    })
+  await Promise.all([
+    dynamo.send(
+      new UpdateCommand({
+        TableName: REQUESTS_TABLE,
+        Key: { requestId },
+        UpdateExpression: 'SET #s = :playing',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':playing': 'playing' }
+      })
+    ),
+    s.status === 'draft'
+      ? dynamo.send(
+          new UpdateCommand({
+            TableName: SESSIONS_TABLE,
+            Key: { sessionId: r.sessionId },
+            UpdateExpression: 'SET currentSongId = :rid, #s = :active',
+            ExpressionAttributeNames: { '#s': 'status' },
+            ExpressionAttributeValues: { ':rid': requestId, ':active': 'active' }
+          })
+        )
+      : dynamo.send(
+          new UpdateCommand({
+            TableName: SESSIONS_TABLE,
+            Key: { sessionId: r.sessionId },
+            UpdateExpression: 'SET currentSongId = :rid',
+            ExpressionAttributeValues: { ':rid': requestId }
+          })
+        )
   ]);
 
   const state = await refreshQueueState(r.sessionId);
@@ -452,16 +538,33 @@ export async function markRequestPlaying({ requestId }: QueueActionInput) {
 export async function markRequestPlayed({ requestId }: QueueActionInput) {
   const r = await fetchRequestOrThrow(requestId);
   const s = await fetchSessionOrThrow(r.sessionId);
+  const now = new Date().toISOString();
+
+  const updates: Promise<unknown>[] = [
+    dynamo.send(
+      new UpdateCommand({
+        TableName: REQUESTS_TABLE,
+        Key: { requestId },
+        UpdateExpression: 'SET #s = :played, playedAt = :now',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':played': 'played', ':now': now }
+      })
+    )
+  ];
 
   if (s.currentSongId === requestId) {
-    await prisma.$transaction([
-      prisma.songRequest.update({ where: { requestId }, data: { status: 'played', playedAt: new Date() } }),
-      prisma.partySession.update({ where: { sessionId: r.sessionId }, data: { currentSongId: null } })
-    ]);
-  } else {
-    await prisma.songRequest.update({ where: { requestId }, data: { status: 'played', playedAt: new Date() } });
+    updates.push(
+      dynamo.send(
+        new UpdateCommand({
+          TableName: SESSIONS_TABLE,
+          Key: { sessionId: r.sessionId },
+          UpdateExpression: 'REMOVE currentSongId'
+        })
+      )
+    );
   }
 
+  await Promise.all(updates);
   const state = await refreshQueueState(r.sessionId);
   emitPartyUpdate(r.sessionId);
   return state;
@@ -471,15 +574,31 @@ export async function skipRequest({ requestId }: QueueActionInput) {
   const r = await fetchRequestOrThrow(requestId);
   const s = await fetchSessionOrThrow(r.sessionId);
 
+  const updates: Promise<unknown>[] = [
+    dynamo.send(
+      new UpdateCommand({
+        TableName: REQUESTS_TABLE,
+        Key: { requestId },
+        UpdateExpression: 'SET #s = :skipped',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':skipped': 'skipped' }
+      })
+    )
+  ];
+
   if (s.currentSongId === requestId) {
-    await prisma.$transaction([
-      prisma.songRequest.update({ where: { requestId }, data: { status: 'skipped' } }),
-      prisma.partySession.update({ where: { sessionId: r.sessionId }, data: { currentSongId: null } })
-    ]);
-  } else {
-    await prisma.songRequest.update({ where: { requestId }, data: { status: 'skipped' } });
+    updates.push(
+      dynamo.send(
+        new UpdateCommand({
+          TableName: SESSIONS_TABLE,
+          Key: { sessionId: r.sessionId },
+          UpdateExpression: 'REMOVE currentSongId'
+        })
+      )
+    );
   }
 
+  await Promise.all(updates);
   const state = await refreshQueueState(r.sessionId);
   emitPartyUpdate(r.sessionId);
   return state;
@@ -490,15 +609,34 @@ export async function forceSyncCurrentSong(sessionId: string, requestId: string)
   const r = await fetchRequestOrThrow(requestId);
   if (r.sessionId !== sessionId) throw new Error('Song request does not belong to this party session.');
 
-  await prisma.$transaction([
-    prisma.partySession.update({
-      where: { sessionId },
-      data: {
-        currentSongId: requestId,
-        ...(s.status === 'draft' && { status: 'active' })
-      }
-    }),
-    prisma.songRequest.update({ where: { requestId }, data: { status: 'playing' } })
+  await Promise.all([
+    s.status === 'draft'
+      ? dynamo.send(
+          new UpdateCommand({
+            TableName: SESSIONS_TABLE,
+            Key: { sessionId },
+            UpdateExpression: 'SET currentSongId = :rid, #s = :active',
+            ExpressionAttributeNames: { '#s': 'status' },
+            ExpressionAttributeValues: { ':rid': requestId, ':active': 'active' }
+          })
+        )
+      : dynamo.send(
+          new UpdateCommand({
+            TableName: SESSIONS_TABLE,
+            Key: { sessionId },
+            UpdateExpression: 'SET currentSongId = :rid',
+            ExpressionAttributeValues: { ':rid': requestId }
+          })
+        ),
+    dynamo.send(
+      new UpdateCommand({
+        TableName: REQUESTS_TABLE,
+        Key: { requestId },
+        UpdateExpression: 'SET #s = :playing',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':playing': 'playing' }
+      })
+    )
   ]);
 
   const state = await refreshQueueState(sessionId);
@@ -507,7 +645,7 @@ export async function forceSyncCurrentSong(sessionId: string, requestId: string)
 }
 
 export async function reorderRequest(sessionId: string, requestId: string, direction: 'up' | 'down') {
-  const rows = await prisma.songRequest.findMany({ where: { sessionId } });
+  const rows = await fetchRequestsBySession(sessionId);
   const requests = rows
     .map(mapRequest)
     .filter((r) => r.status !== 'played' && r.status !== 'skipped' && r.status !== 'rejected');
@@ -520,13 +658,17 @@ export async function reorderRequest(sessionId: string, requestId: string, direc
   const neighbor = direction === 'up' ? ordered[index - 1] : ordered[index + 1];
   if (!neighbor) return refreshQueueState(sessionId);
 
-  await prisma.songRequest.update({
-    where: { requestId },
-    data: {
-      manualPriority: target.manualPriority + (direction === 'up' ? 12 : -12),
-      priorityScore: direction === 'up' ? neighbor.priorityScore + 1 : neighbor.priorityScore - 1
-    }
-  });
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: REQUESTS_TABLE,
+      Key: { requestId },
+      UpdateExpression: 'SET manualPriority = :mp, priorityScore = :ps',
+      ExpressionAttributeValues: {
+        ':mp': target.manualPriority + (direction === 'up' ? 12 : -12),
+        ':ps': direction === 'up' ? neighbor.priorityScore + 1 : neighbor.priorityScore - 1
+      }
+    })
+  );
 
   const state = await refreshQueueState(sessionId);
   emitPartyUpdate(sessionId);
