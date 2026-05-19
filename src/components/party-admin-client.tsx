@@ -138,8 +138,20 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
             <h2 className="section-title">{data.session.partyName}</h2>
             <p className="subtle">Status: {data.session.status} • Requests {data.session.requestsLocked ? 'locked' : 'open'}</p>
           </div>
-          <div className={`pill ${data.session.status}`}>
-            <strong>{data.session.status}</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div className={`pill ${data.session.status}`}>
+              <strong>{data.session.status}</strong>
+            </div>
+            <button
+              className="btn secondary"
+              style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+              onClick={async () => {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/admin/login';
+              }}
+            >
+              Log out
+            </button>
           </div>
         </div>
 
