@@ -163,18 +163,28 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
         {notice ? <div className="pill" style={{ color: 'var(--success)' }}>{notice}</div> : null}
         {error ? <div className="pill" style={{ color: 'var(--danger)' }}>{error}</div> : null}
 
+        {isPending && query.trim().length >= 2 && results.length === 0 && (
+          <div className="search-loading">Searching Apple Music…</div>
+        )}
+
         <div className="search-list">
           {results.map((song) => (
             <div className="search-result" key={`${song.appleMusicId ?? song.songTitle}-${song.artistName}`}>
               <div className="search-result-top">
                 <div className="song-meta">
-                  <div className="image-chip" aria-hidden="true" />
+                  {song.artworkUrl ? (
+                    <img className="artwork-img" src={song.artworkUrl} alt={song.albumName ?? song.songTitle} />
+                  ) : (
+                    <div className="image-chip" aria-hidden="true" />
+                  )}
                   <div>
                     <p className="track-title">{song.songTitle}</p>
-                    <p className="track-subtitle">{song.artistName} • {song.albumName ?? 'Single'} • {song.genre ?? 'Genre unknown'}</p>
+                    <p className="track-subtitle">{song.artistName}{song.albumName ? ` • ${song.albumName}` : ''}</p>
                   </div>
                 </div>
-                <div className="badge approved">{song.sourceProvider}</div>
+                <div className={`badge ${song.sourceProvider === 'apple-music' ? 'apple-music' : 'built-in'}`}>
+                  {song.sourceProvider === 'apple-music' ? '♫ Apple Music' : 'built-in'}
+                </div>
               </div>
               <div className="row-meta" style={{ marginTop: 12 }}>
                 <div className="pill"><strong>{song.bpm ?? '??'}</strong><span>BPM</span></div>

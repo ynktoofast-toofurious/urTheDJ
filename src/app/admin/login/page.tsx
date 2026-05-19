@@ -55,7 +55,7 @@ function LoginForm() {
 
   return (
     <>
-      <div style={{ display: 'flex', gap: '0.75rem' }}>
+      <div className="pin-row">
         {pin.map((digit, i) => (
           <input
             key={i}
@@ -67,40 +67,27 @@ function LoginForm() {
             onChange={e => handleChange(i, e.target.value)}
             onKeyDown={e => handleKeyDown(i, e)}
             disabled={loading}
-            style={{
-              width: '3.5rem',
-              height: '3.5rem',
-              fontSize: '1.5rem',
-              textAlign: 'center',
-              border: '2px solid var(--border)',
-              borderRadius: '0.75rem',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              outline: 'none',
-            }}
+            className="pin-cell"
           />
         ))}
       </div>
 
-      {error && (
-        <p style={{ color: 'var(--accent-red, #f87171)', fontWeight: 600 }}>{error}</p>
-      )}
-
-      {loading && <p style={{ color: 'var(--text-muted)' }}>Checking…</p>}
+      {error && <p className="pin-error">{error}</p>}
+      {loading && <p className="subtle">Checking…</p>}
     </>
   );
 }
 
 export default function AdminLoginPage() {
   return (
-    <main className="app-frame" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '2rem' }}>
-      <section style={{ textAlign: 'center' }}>
+    <main className="login-page">
+      <section className="login-title">
         <p className="eyebrow">DJ Access</p>
         <h1>Enter your PIN</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>4-digit admin PIN required to manage the party.</p>
+        <p className="subtle">4-digit admin PIN required to manage the party.</p>
       </section>
 
-      <Suspense fallback={<div style={{ display: 'flex', gap: '0.75rem' }}>{[0,1,2,3].map(i => <div key={i} style={{ width: '3.5rem', height: '3.5rem', borderRadius: '0.75rem', background: 'var(--surface)', border: '2px solid var(--border)' }} />)}</div>}>
+      <Suspense fallback={<div className="pin-row">{[0,1,2,3].map(i => <div key={i} className="pin-cell" style={{ pointerEvents: 'none' }} />)}</div>}>
         <LoginForm />
       </Suspense>
     </main>

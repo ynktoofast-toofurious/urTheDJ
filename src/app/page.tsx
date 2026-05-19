@@ -5,28 +5,28 @@ export default function HomePage() {
     <main className="app-frame stack">
       <section className="hero">
         <p className="eyebrow">urTheDJ</p>
-        <h1>Party request flow built for live energy, not a generic queue.</h1>
+        <h1>Party requests built for live energy.</h1>
         <p className="hero-copy">
-          Create a session, start the party, let guests search Apple Music, and keep the dance floor moving with a DJ dashboard that sorts requests by BPM, style, energy, and request timing.
+          Create a session, let guests search Apple Music, and keep the dance floor moving with a smart queue that sorts by BPM, style, energy, and timing — updated live on every device.
         </p>
         <div className="hero-actions">
-          <Link className="btn" href="/admin/create-party">Create Party</Link>
-          <Link className="btn secondary" href="/party/demo">Open Guest Demo</Link>
+          <Link className="btn" href="/admin/create-party">Start a Party</Link>
+          <Link className="btn secondary" href="/party/demo">Guest Demo</Link>
         </div>
       </section>
 
       <section className="landing-grid section">
         <div className="panel stack">
-          <h2 className="section-title">Guest-first requests</h2>
-          <p className="subtle">A mobile-friendly guest view keeps the interface simple: current song, last three played, next three queued, and a one-tap request flow.</p>
+          <h2 className="section-title">Smart queue</h2>
+          <p className="subtle">Requests auto-sort by BPM, energy level, style compatibility, and request timing — the dashboard always surfaces the best next track, not just the oldest one.</p>
         </div>
         <div className="panel stack">
-          <h2 className="section-title">DJ control center</h2>
-          <p className="subtle">The admin dashboard includes approve, reject, skip, move up/down, mark played, and force sync controls with reserved space for future transition tools.</p>
+          <h2 className="section-title">Live Apple Music search</h2>
+          <p className="subtle">Guests search the full Apple Music catalog in real time. Results include artwork, BPM, and energy level — everything the DJ needs to make the call instantly.</p>
         </div>
         <div className="panel stack">
-          <h2 className="section-title">AWS-ready backend</h2>
-          <p className="subtle">The API routes are ready to back onto API Gateway, Lambda, and DynamoDB. Local memory fallback keeps the app usable during development before the cloud tables are connected.</p>
+          <h2 className="section-title">Instant sync</h2>
+          <p className="subtle">Server-sent events push queue updates to every screen the moment the DJ acts — no page refresh, no polling delay, no missed moments on the floor.</p>
         </div>
       </section>
     </main>
