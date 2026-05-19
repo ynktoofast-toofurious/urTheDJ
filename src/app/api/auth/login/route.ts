@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { pin?: string };
-  const adminPin = process.env.ADMIN_PIN ?? '0000';
+  const adminPin = (process.env.ADMIN_PIN ?? '0000').trim();
 
   if (!body.pin || body.pin !== adminPin) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 });
