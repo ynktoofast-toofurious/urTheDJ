@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { fetchAdminDashboard } from '@/lib/api';
-import type { AdminDashboardModel, SongRequest } from '@/lib/types';
+import { fetchAdminDashboard, searchSongs, submitSongRequest } from '@/lib/api';
+import type { AdminDashboardModel, SearchSongResult, SongRequest } from '@/lib/types';
 
 type ActionName = 'start' | 'pause' | 'end' | 'lock' | 'reopen' | 'approve' | 'reject' | 'playing' | 'played' | 'skip' | 'forceSync' | 'reorder';
 
@@ -36,6 +36,12 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [selectedSongId, setSelectedSongId] = useState('');
   const [isPending, startTransition] = useTransition();
 
+  // DJ song search
+  const [djQuery, setDjQuery] = useState('');
+  const [djResults, setDjResults] = useState<SearchSongResult[]>([]);
+  const [djNotice, setDjNotice] = useState('');
+  const [djSearchPending, startDjSearch] = useTransition();
+
   async function loadDashboard() {
     try {
       const dashboard = await fetchAdminDashboard(sessionId);
@@ -45,6 +51,31 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unable to load party dashboard.');
     }
+  }
+
+  useEffect(() => {
+    if (djQuery.trim().length < 2) { setDjResults([]); return; }
+    const t = window.setTimeout(() => {
+      startDjSearch(async () => {
+        try { setDjResults(await searchSongs(djQuery)); } catch { /* ignore */ }
+      });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [djQuery]);
+
+  async function djAddSong(song: SearchSongResult) {
+    setDjNotice('');
+    startTransition(async () => {
+      try {
+        await submitSongRequest({ sessionId, requestedBy: 'DJ', song });
+        setDjNotice(`${song.songTitle} added to queue.`);
+        setDjQuery('');
+        setDjResults([]);
+        await loadDashboard();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to add song.');
+      }
+    });
   }
 
   useEffect(() => {
@@ -168,6 +199,45 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
           <button className="btn danger" disabled={isPending || data.session.status === 'ended'} onClick={() => postAction('end')}>End Party</button>
           <button className="btn secondary" disabled={isPending || data.session.requestsLocked} onClick={() => postAction('lock')}>Lock Requests</button>
           <button className="btn secondary" disabled={isPending || !data.session.requestsLocked} onClick={() => postAction('reopen')}>Reopen Requests</button>
+        </div>
+
+        <div className="card stack">
+          <h3 className="section-title" style={{ fontSize: '1.15rem' }}>Add a Song (DJ)</h3>
+          <div className="field">
+            <label htmlFor="djSearch">Search songs</label>
+            <input
+              id="djSearch"
+              value={djQuery}
+              onChange={(e) => setDjQuery(e.target.value)}
+              placeholder="Search Apple Music or catalog…"
+            />
+          </div>
+          {djNotice ? <div className="pill" style={{ color: 'var(--success)' }}>{djNotice}</div> : null}
+          {djSearchPending && djQuery.trim().length >= 2 && djResults.length === 0 && (
+            <p className="subtle">Searching…</p>
+          )}
+          <div className="search-list">
+            {djResults.map((song) => (
+              <div className="search-result" key={`${song.appleMusicId ?? song.songTitle}-${song.artistName}`}>
+                <div className="search-result-top">
+                  <div className="song-meta">
+                    {song.artworkUrl ? (
+                      <img className="artwork-img" src={song.artworkUrl} alt={song.albumName ?? song.songTitle} />
+                    ) : (
+                      <div className="image-chip" aria-hidden="true" />
+                    )}
+                    <div>
+                      <p className="track-title">{song.songTitle}</p>
+                      <p className="track-subtitle">{song.artistName}{song.albumName ? ` • ${song.albumName}` : ''}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="result-actions" style={{ marginTop: 8 }}>
+                  <button className="btn full-width" disabled={isPending} onClick={() => void djAddSong(song)}>Add to Queue</button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="section-grid">
