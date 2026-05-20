@@ -9,7 +9,7 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchSongResult[]>([]);
   const [selectedSong, setSelectedSong] = useState<SearchSongResult | null>(null);
-  const [requestedBy, setRequestedBy] = useState('Guest');
+  const [requestedBy, setRequestedBy] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -18,6 +18,10 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
     try {
       const view = await fetchGuestView(sessionId);
       setData(view);
+      if (!requestedBy) {
+        const firstGuest = view.session.guestList?.[0] ?? '';
+        setRequestedBy(firstGuest);
+      }
       setError('');
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unable to load guest view.');
@@ -80,6 +84,10 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
   async function addSong(song: SearchSongResult) {
     setNotice('');
     setError('');
+    if (!requestedBy.trim()) {
+      setError('Please select your name before adding a song.');
+      return;
+    }
     startTransition(async () => {
       try {
         const response = await submitSongRequest({
@@ -112,48 +120,29 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <div className="split-grid">
-      <div className="panel stack">
+    <div className="stack">
+      {/* ── Header ── */}
+      <div className="panel">
         <p className="eyebrow">Guest view</p>
         <h2 className="section-title">{data.session.partyName}</h2>
-        <p className="subtle">Tap a song, add it to the queue, and the DJ dashboard keeps the set flowing by BPM, style, and energy.</p>
-
-        <div className="metrics">
-          <div className="stat"><span className="tiny">Current song</span><strong className="value">{data.currentSong?.songTitle ?? 'Waiting for the first track'}</strong></div>
-          <div className="stat"><span className="tiny">Playlist status</span><strong className="value">{data.session.status}</strong></div>
-          <div className="stat"><span className="tiny">Requests</span><strong className="value">{data.nextSongs.length}</strong></div>
-        </div>
-
-        <div className="card stack">
-          <strong>Last 3 songs played</strong>
-          <div className="timeline-list">
-            {data.lastPlayed.length ? data.lastPlayed.map((request) => (
-              <div className="pill" key={request.requestId}>
-                <strong>{request.songTitle}</strong>
-                <span>{request.artistName}</span>
-              </div>
-            )) : <p className="subtle">No songs have been played yet.</p>}
-          </div>
-        </div>
-
-        <div className="card stack">
-          <strong>Next 3 songs</strong>
-          <div className="timeline-list">
-            {data.nextSongs.length ? data.nextSongs.map((request) => (
-              <div className="pill" key={request.requestId}>
-                <strong>{request.songTitle}</strong>
-                <span>{request.artistName}</span>
-              </div>
-            )) : <p className="subtle">Waiting for the next request.</p>}
-          </div>
-        </div>
+        <p className="subtle">Search for a song and the DJ dashboard keeps the set flowing by BPM, style, and energy.</p>
       </div>
 
+      {/* ── Request a Song (right after header) ── */}
       <div className="panel stack">
         <h3 className="section-title" style={{ fontSize: '1.2rem' }}>Request a Song</h3>
         <div className="field">
           <label htmlFor="requestedBy">Your name</label>
-          <input id="requestedBy" value={requestedBy} onChange={(event) => setRequestedBy(event.target.value)} placeholder="Guest or nickname" />
+          {data.session.guestList?.length ? (
+            <select id="requestedBy" value={requestedBy} onChange={(event) => setRequestedBy(event.target.value)}>
+              <option value="" disabled>Select your name</option>
+              {data.session.guestList.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          ) : (
+            <input id="requestedBy" value={requestedBy} onChange={(event) => setRequestedBy(event.target.value)} placeholder="Guest or nickname" />
+          )}
         </div>
         <div className="field">
           <label htmlFor="songSearch">Search songs</label>
@@ -207,6 +196,43 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
             <p className="subtle">{selectedSong.songTitle} by {selectedSong.artistName}</p>
           </div>
         ) : null}
+      </div>
+
+      {/* ── Party Stats ── */}
+      <div className="split-grid">
+        <div className="panel stack">
+          <div className="metrics">
+            <div className="stat"><span className="tiny">Current song</span><strong className="value">{data.currentSong?.songTitle ?? 'Waiting for the first track'}</strong></div>
+            <div className="stat"><span className="tiny">Status</span><strong className="value">{data.session.status}</strong></div>
+            <div className="stat"><span className="tiny">Requests</span><strong className="value">{data.nextSongs.length}</strong></div>
+          </div>
+
+          <div className="card stack">
+            <strong>Last 3 songs played</strong>
+            <div className="timeline-list">
+              {data.lastPlayed.length ? data.lastPlayed.map((request) => (
+                <div className="pill" key={request.requestId}>
+                  <strong>{request.songTitle}</strong>
+                  <span>{request.artistName}</span>
+                </div>
+              )) : <p className="subtle">No songs have been played yet.</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="panel stack">
+          <div className="card stack">
+            <strong>Next 3 songs</strong>
+            <div className="timeline-list">
+              {data.nextSongs.length ? data.nextSongs.map((request) => (
+                <div className="pill" key={request.requestId}>
+                  <strong>{request.songTitle}</strong>
+                  <span>{request.artistName}</span>
+                </div>
+              )) : <p className="subtle">Waiting for the next request.</p>}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

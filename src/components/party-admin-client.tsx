@@ -44,6 +44,10 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [djNotice, setDjNotice] = useState('');
   const [djSearchPending, startDjSearch] = useTransition();
 
+  // Guest list management
+  const [newGuestName, setNewGuestName] = useState('');
+  const [guestListPending, startGuestListTransition] = useTransition();
+
   async function loadDashboard() {
     try {
       const dashboard = await fetchAdminDashboard(sessionId);
@@ -76,6 +80,21 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
         await loadDashboard();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to add song.');
+      }
+    });
+  }
+
+  function saveGuestList(updated: string[]) {
+    startGuestListTransition(async () => {
+      try {
+        await fetch('/api/party/guest-list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, guestList: updated })
+        });
+        await loadDashboard();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to update guest list.');
       }
     });
   }
@@ -124,8 +143,8 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
           start: '/api/party/start',
           pause: '/api/party/pause',
           end: '/api/party/end',
-          lock: '/api/queue/lock-requests',
-          reopen: '/api/queue/reopen-requests',
+          lock: '/api/party/lock-requests',
+          reopen: '/api/party/reopen-requests',
           approve: '/api/queue/approve',
           reject: '/api/queue/reject',
           playing: '/api/queue/mark-playing',
@@ -215,6 +234,41 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
       {error ? <div className="panel" style={{ borderColor: 'rgba(255,107,139,0.4)' }}>{error}</div> : null}
 
+      {/* ── Persistent: DJ Add a Song ── */}
+      <div className="panel">
+        <strong style={{ display: 'block', marginBottom: '0.5rem' }}>Add a Song</strong>
+        <div className="field" style={{ marginBottom: '0.5rem' }}>
+          <input
+            value={djQuery}
+            onChange={(e) => setDjQuery(e.target.value)}
+            placeholder="Search Apple Music or catalog…"
+            style={{ width: '100%' }}
+          />
+        </div>
+        {djNotice ? <div className="pill" style={{ color: 'var(--success)', marginBottom: '0.5rem' }}>{djNotice}</div> : null}
+        {djSearchPending && djQuery.trim().length >= 2 && djResults.length === 0 && (
+          <p className="subtle">Searching…</p>
+        )}
+        <div className="search-list">
+          {djResults.map((song) => (
+            <div className="search-result" key={`${song.appleMusicId ?? song.songTitle}-${song.artistName}`}>
+              <div className="search-result-top">
+                <div className="song-meta">
+                  {song.artworkUrl ? <img className="artwork-img" src={song.artworkUrl} alt={song.songTitle} /> : <div className="image-chip" aria-hidden="true" />}
+                  <div>
+                    <p className="track-title">{song.songTitle}</p>
+                    <p className="track-subtitle">{song.artistName}{song.albumName ? ` • ${song.albumName}` : ''}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="result-actions" style={{ marginTop: 8 }}>
+                <button className="btn full-width" disabled={isPending} onClick={() => void djAddSong(song)}>Add to Queue</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* ── NOW PLAYING TAB ── */}
       {activeTab === 'nowplaying' && (
         <div className="split-grid">
@@ -247,6 +301,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                     <audio
                       key={data.currentSong.requestId}
                       controls
+                      loop
                       onPlay={() => setIsPlaying(true)}
                       onPause={() => setIsPlaying(false)}
                       onEnded={() => setIsPlaying(false)}
@@ -254,7 +309,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                     >
                       <source src={data.currentSong.previewUrl} type="audio/mpeg" />
                     </audio>
-                    <p className="subtle" style={{ fontSize: '0.72rem', marginTop: '0.35rem' }}>30-second Apple Music preview</p>
+                    <p className="subtle" style={{ fontSize: '0.72rem', marginTop: '0.35rem' }}>30-second Apple Music preview — loops while DJ previews</p>
                   </div>
                 )}
 
@@ -276,37 +331,6 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 )}
               </div>
             )}
-
-            {/* DJ Add Song search */}
-            <div className="card stack">
-              <strong>Add a Song</strong>
-              <div className="field">
-                <input
-                  value={djQuery}
-                  onChange={(e) => setDjQuery(e.target.value)}
-                  placeholder="Search Apple Music or catalog…"
-                />
-              </div>
-              {djNotice ? <div className="pill" style={{ color: 'var(--success)' }}>{djNotice}</div> : null}
-              <div className="search-list">
-                {djResults.map((song) => (
-                  <div className="search-result" key={`${song.appleMusicId ?? song.songTitle}-${song.artistName}`}>
-                    <div className="search-result-top">
-                      <div className="song-meta">
-                        {song.artworkUrl ? <img className="artwork-img" src={song.artworkUrl} alt={song.songTitle} /> : <div className="image-chip" aria-hidden="true" />}
-                        <div>
-                          <p className="track-title">{song.songTitle}</p>
-                          <p className="track-subtitle">{song.artistName}{song.albumName ? ` • ${song.albumName}` : ''}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="result-actions" style={{ marginTop: 8 }}>
-                      <button className="btn full-width" disabled={isPending} onClick={() => void djAddSong(song)}>Add to Queue</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Right: Up Next + QR */}
@@ -344,6 +368,45 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                   size={180} bgColor="transparent" fgColor="currentColor" level="M"
                 />
                 <code style={{ fontSize: '0.72rem', opacity: 0.6 }}>/party/{sessionId}</code>
+              </div>
+            </div>
+
+            <div className="card stack">
+              <strong>Guest List</strong>
+              <div className="field" style={{ marginTop: '0.25rem' }}>
+                <input
+                  value={newGuestName}
+                  onChange={(e) => setNewGuestName(e.target.value)}
+                  placeholder="Add guest name"
+                />
+              </div>
+              <div className="row-actions">
+                <button
+                  className="btn secondary"
+                  disabled={guestListPending || !newGuestName.trim()}
+                  onClick={() => {
+                    const updated = [...(data.session.guestList ?? []), newGuestName.trim()];
+                    setNewGuestName('');
+                    saveGuestList(updated);
+                  }}
+                >
+                  Add Guest
+                </button>
+              </div>
+              <div className="timeline-list">
+                {(data.session.guestList ?? []).length ? (data.session.guestList ?? []).map((name) => (
+                  <div className="pill" key={name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{name}</strong>
+                    <button
+                      className="btn secondary"
+                      style={{ padding: '0.15rem 0.5rem', fontSize: '0.72rem' }}
+                      disabled={guestListPending}
+                      onClick={() => saveGuestList((data.session.guestList ?? []).filter((n) => n !== name))}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )) : <p className="subtle">No guests added yet.</p>}
               </div>
             </div>
 

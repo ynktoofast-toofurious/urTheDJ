@@ -25,6 +25,7 @@ interface DbSession {
   currentSongId?: string;
   partyStyle?: string;
   requestsLocked: boolean;
+  guestList?: string[];
   createdAt: string;
   startedAt?: string;
   endedAt?: string;
@@ -83,6 +84,7 @@ function mapSession(s: DbSession): PartySession {
     currentSongId: s.currentSongId,
     partyStyle: s.partyStyle,
     requestsLocked: s.requestsLocked,
+    guestList: s.guestList,
     createdAt: s.createdAt,
     startedAt: s.startedAt,
     endedAt: s.endedAt
@@ -343,6 +345,19 @@ export async function lockPartyRequests(sessionId: string, locked: boolean) {
   const result = await refreshQueueState(sessionId);
   emitPartyUpdate(sessionId);
   return result;
+}
+
+export async function updateGuestList(sessionId: string, guestList: string[]) {
+  await fetchSessionOrThrow(sessionId);
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: SESSIONS_TABLE,
+      Key: { sessionId },
+      UpdateExpression: 'SET guestList = :guestList',
+      ExpressionAttributeValues: { ':guestList': guestList }
+    })
+  );
+  return refreshQueueState(sessionId);
 }
 
 export async function getPartySession(sessionId: string) {

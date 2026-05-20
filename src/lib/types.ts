@@ -11,6 +11,7 @@ export interface PartySession {
   currentSongId?: string;
   partyStyle?: string;
   requestsLocked: boolean;
+  guestList?: string[];
   createdAt: string;
   startedAt?: string;
   endedAt?: string;
