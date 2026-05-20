@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -22,9 +22,9 @@ function ScoreChip({ request }: { request: SongRequest }) {
     <div className="pill">
       <strong>{request.priorityScore}</strong>
       <span>score</span>
-      <span>•</span>
+      <span>â€¢</span>
       <span>{request.bpm ?? '??'} BPM</span>
-      <span>•</span>
+      <span>â€¢</span>
       <span>{request.energyLevel ?? 'medium'}</span>
     </div>
   );
@@ -164,13 +164,13 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="stack">
-      {/* ── Header ── */}
+      {/* â”€â”€ Header â”€â”€ */}
       <div className="panel" style={{ paddingBottom: '0.5rem' }}>
         <div className="status-line">
           <div>
             <p className="eyebrow">Admin / DJ dashboard</p>
             <h2 className="section-title">{data.session.partyName}</h2>
-            <p className="subtle">Status: {data.session.status} • Requests {data.session.requestsLocked ? 'locked' : 'open'}</p>
+            <p className="subtle">Status: {data.session.status} â€¢ Requests {data.session.requestsLocked ? 'locked' : 'open'}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className={`pill ${data.session.status}`}><strong>{data.session.status}</strong></div>
@@ -183,11 +183,11 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
         {/* Party controls */}
         <div className="control-row" style={{ marginTop: '0.75rem' }}>
-          <button className="btn" disabled={isPending || data.session.status === 'active'} onClick={() => postAction('start')}>▶ Start Party</button>
-          <button className="btn secondary" disabled={isPending || data.session.status === 'paused'} onClick={() => postAction('pause')}>⏸ Pause</button>
-          <button className="btn danger" disabled={isPending || data.session.status === 'ended'} onClick={() => postAction('end')}>⏹ End Party</button>
-          <button className="btn secondary" disabled={isPending || data.session.requestsLocked} onClick={() => postAction('lock')}>🔒 Lock Requests</button>
-          <button className="btn secondary" disabled={isPending || !data.session.requestsLocked} onClick={() => postAction('reopen')}>🔓 Reopen</button>
+          <button className="btn" disabled={isPending || data.session.status === 'active'} onClick={() => postAction('start')}>â–¶ Start Party</button>
+          <button className="btn secondary" disabled={isPending || data.session.status === 'paused'} onClick={() => postAction('pause')}>â¸ Pause</button>
+          <button className="btn danger" disabled={isPending || data.session.status === 'ended'} onClick={() => postAction('end')}>â¹ End Party</button>
+          <button className="btn secondary" disabled={isPending || data.session.requestsLocked} onClick={() => postAction('lock')}>ðŸ”’ Lock Requests</button>
+          <button className="btn secondary" disabled={isPending || !data.session.requestsLocked} onClick={() => postAction('reopen')}>ðŸ”“ Reopen</button>
         </div>
 
         {/* Tab bar */}
@@ -207,7 +207,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 letterSpacing: '0.02em',
                 textTransform: 'capitalize'
               }}>
-              {tab === 'nowplaying' ? '🎵 Now Playing' : tab === 'queue' ? '🎛 Queue' : `⏳ Pending (${data.pendingRequests.length})`}
+              {tab === 'nowplaying' ? 'ðŸŽµ Now Playing' : tab === 'queue' ? 'ðŸŽ› Queue' : `â³ Pending (${data.pendingRequests.length})`}
             </button>
           ))}
         </div>
@@ -215,7 +215,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
       {error ? <div className="panel" style={{ borderColor: 'rgba(255,107,139,0.4)' }}>{error}</div> : null}
 
-      {/* ── NOW PLAYING TAB ── */}
+      {/* â”€â”€ NOW PLAYING TAB â”€â”€ */}
       {activeTab === 'nowplaying' && (
         <div className="split-grid">
           <div className="panel stack">
@@ -237,7 +237,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 )}
                 <div style={{ marginTop: '1rem' }}>
                   <p className="track-title" style={{ fontSize: '1.3rem' }}>{data.currentSong.songTitle}</p>
-                  <p className="track-subtitle">{data.currentSong.artistName}{data.currentSong.albumName ? ` • ${data.currentSong.albumName}` : ''}</p>
+                  <p className="track-subtitle">{data.currentSong.artistName}{data.currentSong.albumName ? ` â€¢ ${data.currentSong.albumName}` : ''}</p>
                   <p className="subtle" style={{ marginTop: '0.25rem' }}>Requested by {data.currentSong.requestedBy}</p>
                 </div>
 
@@ -260,19 +260,19 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
                 <div className="row-actions" style={{ marginTop: '1rem', justifyContent: 'center' }}>
                   <button className="btn" disabled={isPending} onClick={() => postAction('playing', { requestId: data.currentSong?.requestId })}>
-                    {isPlaying ? '▶ Now Playing' : '▶ Mark as Playing'}
+                    {isPlaying ? 'â–¶ Now Playing' : 'â–¶ Mark as Playing'}
                   </button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('played', { requestId: data.currentSong?.requestId })}>✓ Mark Played</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: data.currentSong?.requestId })}>⏭ Skip</button>
+                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('played', { requestId: data.currentSong?.requestId })}>âœ“ Mark Played</button>
+                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: data.currentSong?.requestId })}>â­ Skip</button>
                 </div>
               </div>
             ) : (
               <div className="card stack" style={{ textAlign: 'center', padding: '2.5rem' }}>
-                <p style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎧</p>
+                <p style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>ðŸŽ§</p>
                 <p className="section-title">Nothing is playing yet</p>
                 <p className="subtle">Start the party, then mark a song from the queue as playing.</p>
                 {data.session.status === 'draft' && (
-                  <button className="btn" style={{ marginTop: '1rem' }} disabled={isPending} onClick={() => postAction('start')}>▶ Start the Party</button>
+                  <button className="btn" style={{ marginTop: '1rem' }} disabled={isPending} onClick={() => postAction('start')}>â–¶ Start the Party</button>
                 )}
               </div>
             )}
@@ -284,7 +284,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 <input
                   value={djQuery}
                   onChange={(e) => setDjQuery(e.target.value)}
-                  placeholder="Search Apple Music or catalog…"
+                  placeholder="Search Apple Music or catalogâ€¦"
                 />
               </div>
               {djNotice ? <div className="pill" style={{ color: 'var(--success)' }}>{djNotice}</div> : null}
@@ -296,7 +296,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                         {song.artworkUrl ? <img className="artwork-img" src={song.artworkUrl} alt={song.songTitle} /> : <div className="image-chip" aria-hidden="true" />}
                         <div>
                           <p className="track-title">{song.songTitle}</p>
-                          <p className="track-subtitle">{song.artistName}{song.albumName ? ` • ${song.albumName}` : ''}</p>
+                          <p className="track-subtitle">{song.artistName}{song.albumName ? ` â€¢ ${song.albumName}` : ''}</p>
                         </div>
                       </div>
                     </div>
@@ -321,14 +321,14 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                         {req.artworkUrl && <img src={req.artworkUrl} alt={req.songTitle} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover' }} />}
                         <div>
                           <p className="track-title">{req.songTitle}</p>
-                          <p className="track-subtitle">{req.artistName} • {req.requestedBy}</p>
+                          <p className="track-subtitle">{req.artistName} â€¢ {req.requestedBy}</p>
                         </div>
                       </div>
                       <span className={`badge ${req.status}`}>{statusLabels[req.status]}</span>
                     </div>
                     <div className="row-actions">
-                      <button className="btn secondary" disabled={isPending} onClick={() => postAction('playing', { requestId: req.requestId })}>▶ Play This</button>
-                      <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: req.requestId })}>⏭ Skip</button>
+                      <button className="btn secondary" disabled={isPending} onClick={() => postAction('playing', { requestId: req.requestId })}>â–¶ Play This</button>
+                      <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: req.requestId })}>â­ Skip</button>
                     </div>
                   </div>
                 )) : <p className="subtle">No songs in the queue yet.</p>}
@@ -359,7 +359,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
-      {/* ── QUEUE TAB ── */}
+      {/* â”€â”€ QUEUE TAB â”€â”€ */}
       {activeTab === 'queue' && (
         <div className="panel stack">
           <div className="status-line">
@@ -375,7 +375,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                     {request.artworkUrl && <img src={request.artworkUrl} alt={request.songTitle} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover' }} />}
                     <div>
                       <p className="track-title">{request.songTitle}</p>
-                      <p className="track-subtitle">{request.artistName} • {request.requestedBy} • {request.genre ?? ''}</p>
+                      <p className="track-subtitle">{request.artistName} â€¢ {request.requestedBy} â€¢ {request.genre ?? ''}</p>
                     </div>
                   </div>
                   <span className={`badge ${request.status}`}>{statusLabels[request.status]}</span>
@@ -388,9 +388,9 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                   <button className="btn secondary" disabled={isPending} onClick={() => postAction('reject', { requestId: request.requestId })}>Reject</button>
                   <button className="btn secondary" disabled={isPending} onClick={() => postAction('reorder', { requestId: request.requestId, direction: 'up' })}>Move Up</button>
                   <button className="btn secondary" disabled={isPending} onClick={() => postAction('reorder', { requestId: request.requestId, direction: 'down' })}>Move Down</button>
-                  <button className="btn" disabled={isPending} onClick={() => postAction('playing', { requestId: request.requestId })}>▶ Play</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('played', { requestId: request.requestId })}>✓ Played</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: request.requestId })}>⏭ Skip</button>
+                  <button className="btn" disabled={isPending} onClick={() => postAction('playing', { requestId: request.requestId })}>â–¶ Play</button>
+                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('played', { requestId: request.requestId })}>âœ“ Played</button>
+                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: request.requestId })}>â­ Skip</button>
                 </div>
               </div>
             ))}
@@ -398,7 +398,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
-      {/* ── PENDING TAB ── */}
+      {/* â”€â”€ PENDING TAB â”€â”€ */}
       {activeTab === 'pending' && (
         <div className="panel stack">
           <h3 className="section-title">Pending Requests</h3>
@@ -411,216 +411,21 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                     {request.artworkUrl && <img src={request.artworkUrl} alt={request.songTitle} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover' }} />}
                     <div>
                       <p className="track-title">{request.songTitle}</p>
-                      <p className="track-subtitle">{request.artistName} • Requested by {request.requestedBy}</p>
+                      <p className="track-subtitle">{request.artistName} â€¢ Requested by {request.requestedBy}</p>
                     </div>
                   </div>
                   <ScoreChip request={request} />
                 </div>
                 <div className="row-actions">
-                  <button className="btn" disabled={isPending} onClick={() => postAction('approve', { requestId: request.requestId })}>✓ Approve</button>
-                  <button className="btn danger" disabled={isPending} onClick={() => postAction('reject', { requestId: request.requestId })}>✗ Reject</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('playing', { requestId: request.requestId })}>▶ Play Now</button>
+                  <button className="btn" disabled={isPending} onClick={() => postAction('approve', { requestId: request.requestId })}>âœ“ Approve</button>
+                  <button className="btn danger" disabled={isPending} onClick={() => postAction('reject', { requestId: request.requestId })}>âœ— Reject</button>
+                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('playing', { requestId: request.requestId })}>â–¶ Play Now</button>
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-        <div className="metrics">
-          <div className="stat"><span className="tiny">Current song</span><strong className="value">{data.currentSong ? `${data.currentSong.songTitle}` : 'Nothing playing'}</strong></div>
-          <div className="stat"><span className="tiny">Queue items</span><strong className="value">{data.queue.length}</strong></div>
-          <div className="stat"><span className="tiny">Pending</span><strong className="value">{data.pendingRequests.length}</strong></div>
-          <div className="stat"><span className="tiny">Approved</span><strong className="value">{data.approvedSongs.length}</strong></div>
-        </div>
-
-        <div className="control-row">
-          <button className="btn" disabled={isPending || data.session.status === 'active'} onClick={() => postAction('start')}>Start Your Party</button>
-          <button className="btn secondary" disabled={isPending || data.session.status === 'paused'} onClick={() => postAction('pause')}>Pause Party</button>
-          <button className="btn danger" disabled={isPending || data.session.status === 'ended'} onClick={() => postAction('end')}>End Party</button>
-          <button className="btn secondary" disabled={isPending || data.session.requestsLocked} onClick={() => postAction('lock')}>Lock Requests</button>
-          <button className="btn secondary" disabled={isPending || !data.session.requestsLocked} onClick={() => postAction('reopen')}>Reopen Requests</button>
-        </div>
-
-        <div className="card stack">
-          <h3 className="section-title" style={{ fontSize: '1.15rem' }}>Add a Song (DJ)</h3>
-          <div className="field">
-            <label htmlFor="djSearch">Search songs</label>
-            <input
-              id="djSearch"
-              value={djQuery}
-              onChange={(e) => setDjQuery(e.target.value)}
-              placeholder="Search Apple Music or catalog…"
-            />
-          </div>
-          {djNotice ? <div className="pill" style={{ color: 'var(--success)' }}>{djNotice}</div> : null}
-          {djSearchPending && djQuery.trim().length >= 2 && djResults.length === 0 && (
-            <p className="subtle">Searching…</p>
-          )}
-          <div className="search-list">
-            {djResults.map((song) => (
-              <div className="search-result" key={`${song.appleMusicId ?? song.songTitle}-${song.artistName}`}>
-                <div className="search-result-top">
-                  <div className="song-meta">
-                    {song.artworkUrl ? (
-                      <img className="artwork-img" src={song.artworkUrl} alt={song.albumName ?? song.songTitle} />
-                    ) : (
-                      <div className="image-chip" aria-hidden="true" />
-                    )}
-                    <div>
-                      <p className="track-title">{song.songTitle}</p>
-                      <p className="track-subtitle">{song.artistName}{song.albumName ? ` • ${song.albumName}` : ''}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="result-actions" style={{ marginTop: 8 }}>
-                  <button className="btn full-width" disabled={isPending} onClick={() => void djAddSong(song)}>Add to Queue</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="section-grid">
-          <div className="card stack">
-            <div className="status-line">
-              <h3 className="section-title" style={{ fontSize: '1.15rem' }}>Current / Next</h3>
-              {nextSong ? <ScoreChip request={nextSong} /> : null}
-            </div>
-            {data.currentSong ? (
-              <div className="queue-row">
-                <div className="row-top">
-                  <div>
-                    <p className="track-title">Now playing: {data.currentSong.songTitle}</p>
-                    <p className="track-subtitle">{data.currentSong.artistName} • Requested by {data.currentSong.requestedBy}</p>
-                  </div>
-                  <span className={`badge ${data.currentSong.status}`}>{statusLabels[data.currentSong.status]}</span>
-                </div>
-                <div className="row-actions">
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('playing', { requestId: data.currentSong?.requestId })}>Mark as Playing</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('played', { requestId: data.currentSong?.requestId })}>Mark as Played</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: data.currentSong?.requestId })}>Skip Song</button>
-                </div>
-              </div>
-            ) : (
-              <p className="subtle">No song is currently marked as playing. Use the queue below to force sync a track.</p>
-            )}
-          </div>
-
-          <div className="card stack">
-            <h3 className="section-title" style={{ fontSize: '1.15rem' }}>Coming Soon Audio Tools</h3>
-            <p className="subtle">Reserved space for transition suggestions, vocal isolation, beat dry mix, and tempo blend controls.</p>
-            <div className="timeline-list">
-              {['Live transition suggestion', 'Remove vocals / acapella', 'Isolate melody', 'Keep dry beat', 'Transition type selector'].map((item) => (
-                <div className="coming-soon-item" key={item}>
-                  <div className="status-line">
-                    <strong>{item}</strong>
-                    <span className="badge pending">Coming soon</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="split-grid two-up">
-        <div className="panel stack">
-          <div className="status-line">
-            <h3 className="section-title" style={{ fontSize: '1.2rem' }}>Full Queue</h3>
-            <button className="btn secondary" disabled={isPending || !nextSong} onClick={() => postAction('forceSync', { requestId: nextSong?.requestId })}>Force Sync Current Song</button>
-          </div>
-
-          <div className="queue-list">
-            {data.queue.map((request) => (
-              <div className="queue-row" key={request.requestId}>
-                <div className="row-top">
-                  <div>
-                    <p className="track-title">{request.songTitle}</p>
-                    <p className="track-subtitle">{request.artistName} • {request.requestedBy} • {request.genre ?? 'Genre unknown'} / {request.style ?? 'Style unknown'}</p>
-                  </div>
-                  <span className={`badge ${request.status}`}>{statusLabels[request.status]}</span>
-                </div>
-                <div className="row-meta">
-                  <ScoreChip request={request} />
-                  <span className="tiny">Source: {request.sourceProvider}</span>
-                </div>
-                <div className="row-actions">
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('approve', { requestId: request.requestId })}>Approve</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('reject', { requestId: request.requestId })}>Reject</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('reorder', { requestId: request.requestId, direction: 'up' })}>Move Up</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('reorder', { requestId: request.requestId, direction: 'down' })}>Move Down</button>
-                </div>
-                <div className="row-actions">
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('playing', { requestId: request.requestId })}>Mark Playing</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('played', { requestId: request.requestId })}>Mark Played</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: request.requestId })}>Skip</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('forceSync', { requestId: request.requestId })}>Force Sync</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="panel stack">
-          <h3 className="section-title" style={{ fontSize: '1.2rem' }}>Live Snapshot</h3>
-          <div className="card stack">
-            <strong>Guest QR Code</strong>
-            <p className="subtle" style={{ fontSize: '0.78rem' }}>Guests scan this to open the song-request screen.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingTop: 8 }}>
-              <QRCodeSVG
-                value={typeof window !== 'undefined' ? `${window.location.origin}/party/${sessionId}` : `/party/${sessionId}`}
-                size={180}
-                bgColor="transparent"
-                fgColor="currentColor"
-                level="M"
-              />
-              <code style={{ fontSize: '0.72rem', opacity: 0.6 }}>/party/{sessionId}</code>
-            </div>
-          </div>
-
-          <div className="card stack">
-            <strong>Last 3 songs played</strong>
-            <div className="timeline-list">
-              {data.lastPlayed.length ? data.lastPlayed.map((request) => (
-                <div className="pill" key={request.requestId}>
-                  <strong>{request.songTitle}</strong>
-                  <span>by {request.artistName}</span>
-                </div>
-              )) : <p className="subtle">No songs have been marked as played yet.</p>}
-            </div>
-          </div>
-
-          <div className="card stack">
-            <strong>Next 3 songs</strong>
-            <div className="timeline-list">
-              {data.nextSongs.length ? data.nextSongs.map((request) => (
-                <div className="pill" key={request.requestId}>
-                  <strong>{request.songTitle}</strong>
-                  <span>{request.artistName}</span>
-                </div>
-              )) : <p className="subtle">No approved or pending songs in the queue.</p>}
-            </div>
-          </div>
-
-          <div className="card stack">
-            <strong>Request statuses</strong>
-            <div className="timeline-list">
-              {data.pendingRequests.length ? data.pendingRequests.map((request) => (
-                <div className="pill" key={request.requestId}>
-                  <strong>Pending</strong>
-                  <span>{request.songTitle}</span>
-                </div>
-              )) : <p className="subtle">No pending requests.</p>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {error ? <div className="panel" style={{ borderColor: 'rgba(255,107,139,0.4)' }}>{error}</div> : null}
     </div>
   );
 }
