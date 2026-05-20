@@ -38,6 +38,7 @@ interface DbRequest {
   albumName?: string;
   appleMusicId?: string;
   artworkUrl?: string;
+  previewUrl?: string;
   durationMs?: number;
   bpm?: number;
   genre?: string;
@@ -97,6 +98,7 @@ function mapRequest(r: DbRequest): SongRequest {
     albumName: r.albumName,
     appleMusicId: r.appleMusicId,
     artworkUrl: r.artworkUrl,
+    previewUrl: r.previewUrl,
     durationMs: r.durationMs,
     bpm: r.bpm,
     genre: r.genre,
@@ -391,6 +393,7 @@ export async function searchAppleMusic(query: string) {
       artistName?: string;
       collectionName?: string;
       artworkUrl100?: string;
+      previewUrl?: string;
       trackTimeMillis?: number;
       primaryGenreName?: string;
     }>;
@@ -405,6 +408,7 @@ export async function searchAppleMusic(query: string) {
     albumName: track.collectionName,
     appleMusicId: track.trackId?.toString(),
     artworkUrl: track.artworkUrl100?.replace('100x100bb', '400x400bb'),
+    previewUrl: track.previewUrl,
     durationMs: track.trackTimeMillis,
     bpm: 90 + index * 4,
     genre: track.primaryGenreName ?? 'Music',
@@ -445,6 +449,7 @@ export async function requestSong(input: SongRequestInput) {
     albumName: input.song.albumName,
     appleMusicId: input.song.appleMusicId,
     artworkUrl: input.song.artworkUrl,
+    previewUrl: input.song.previewUrl,
     durationMs: input.song.durationMs,
     bpm: input.song.bpm,
     genre: input.song.genre,

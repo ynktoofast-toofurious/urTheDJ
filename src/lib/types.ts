@@ -24,6 +24,7 @@ export interface SongRequest {
   albumName?: string;
   appleMusicId?: string;
   artworkUrl?: string;
+  previewUrl?: string;
   durationMs?: number;
   bpm?: number;
   genre?: string;
@@ -45,6 +46,7 @@ export interface SearchSongResult {
   albumName?: string;
   appleMusicId?: string;
   artworkUrl?: string;
+  previewUrl?: string;
   durationMs?: number;
   bpm?: number;
   genre?: string;
