@@ -35,7 +35,17 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState('');
   const [selectedSongId, setSelectedSongId] = useState('');
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<'nowplaying' | 'queue' | 'pending'>('nowplaying');
+  const [activeTab, setActiveTab] = useState<'nowplaying' | 'queue' | 'pending' | 'failed'>('nowplaying');
+  const [failedDownloads, setFailedDownloads] = useState<{ url: string; time: string; reason: string }[]>([]);
+
+  // Fetch failed downloads when 'failed' tab is active
+  useEffect(() => {
+    if (activeTab === 'failed') {
+      fetch('/api/youtube-download')
+        .then(r => r.json())
+        .then(data => setFailedDownloads(data.failedDownloads || []));
+    }
+  }, [activeTab]);
   const [isPlaying, setIsPlaying] = useState(false);
 
   // DJ song search
@@ -211,7 +221,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
         {/* Tab bar */}
         <div className="tab-bar" style={{ display: 'flex', gap: '0', marginTop: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          {(['nowplaying', 'queue', 'pending'] as const).map((tab) => (
+          {(['nowplaying', 'queue', 'pending', 'failed'] as const).map((tab) => (
             <button key={tab}
               onClick={() => setActiveTab(tab)}
               style={{
@@ -226,10 +236,30 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 letterSpacing: '0.02em',
                 textTransform: 'capitalize'
               }}>
-              {tab === 'nowplaying' ? '🎵 Now Playing' : tab === 'queue' ? '🎛 Queue' : `⏳ Pending (${data.pendingRequests.length})`}
+              {tab === 'nowplaying' ? '🎵 Now Playing' : tab === 'queue' ? '🎛 Queue' : tab === 'pending' ? `⏳ Pending (${data.pendingRequests.length})` : '⚠️ Failed Downloads'}
             </button>
           ))}
         </div>
+            {/* ── FAILED DOWNLOADS TAB ── */}
+            {activeTab === 'failed' && (
+              <div className="panel stack">
+                <h3 className="section-title">Failed YouTube Downloads</h3>
+                {failedDownloads.length === 0 && <p className="subtle">No failed downloads recorded.</p>}
+                <div className="queue-list">
+                  {failedDownloads.map((fail, idx) => (
+                    <div className="queue-row" key={fail.url + fail.time + idx}>
+                      <div className="row-top">
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <p className="track-title">{fail.url}</p>
+                          <p className="track-subtitle">{fail.reason}</p>
+                        </div>
+                        <span className="badge danger">{new Date(fail.time).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
       </div>
 
       {error ? <div className="panel" style={{ borderColor: 'rgba(255,107,139,0.4)' }}>{error}</div> : null}
@@ -475,6 +505,9 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                     <div>
                       <p className="track-title">{request.songTitle}</p>
                       <p className="track-subtitle">{request.artistName} • Requested by {request.requestedBy}</p>
+                      {request.previewUrl?.includes('youtube.com') || request.previewUrl?.includes('youtu.be') ? (
+                        <p className="track-subtitle" style={{ wordBreak: 'break-all' }}>{request.previewUrl}</p>
+                      ) : null}
                     </div>
                   </div>
                   <ScoreChip request={request} />

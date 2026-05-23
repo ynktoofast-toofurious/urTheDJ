@@ -4,6 +4,19 @@ import { useEffect, useState, useTransition } from 'react';
 import { fetchGuestView, searchSongs, submitSongRequest } from '@/lib/api';
 import type { GuestViewModel, SearchSongResult } from '@/lib/types';
 
+// Simple modal component
+function Modal({ open, onClose, children }: { open: boolean, onClose: () => void, children: React.ReactNode }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 8, padding: 24, minWidth: 320, maxWidth: 400, boxShadow: '0 2px 16px rgba(0,0,0,0.2)' }}>
+        {children}
+        <button className="btn" style={{ marginTop: 16 }} onClick={onClose}>Close</button>
+      </div>
+    </div>
+  );
+}
+
 export function GuestPartyClient({ sessionId }: { sessionId: string }) {
   const [data, setData] = useState<GuestViewModel | null>(null);
   const [query, setQuery] = useState('');
@@ -13,6 +26,13 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
+
+  // YouTube modal state
+  const [ytModalOpen, setYtModalOpen] = useState(false);
+  const [ytInput, setYtInput] = useState('');
+  const [ytError, setYtError] = useState('');
+  const [ytSearch, setYtSearch] = useState('');
+  const [ytBrowserUrl, setYtBrowserUrl] = useState('https://www.youtube.com');
 
   async function loadView() {
     try {
@@ -110,6 +130,44 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
     });
   }
 
+  function extractYoutubeId(url: string) {
+    const match = url.match(/(?:youtu.be\/|youtube.com\/(?:watch\?v=|embed\/|v\/|shorts\/))([\w-]{11})/);
+    return match?.[1] ?? '';
+  }
+
+  // Add YouTube song handler
+  async function addYouTubeSong() {
+    setYtError('');
+    setNotice('');
+    if (!requestedBy.trim()) {
+      setYtError('Please select your name before adding a song.');
+      return;
+    }
+    const videoId = extractYoutubeId(ytInput.trim());
+    if (!videoId) {
+      setYtError('Please enter a valid YouTube link.');
+      return;
+    }
+
+    const youtubeSong: SearchSongResult = {
+      songTitle: `YouTube Song (${videoId})`,
+      artistName: 'YouTube',
+      albumName: 'YouTube Request',
+      artworkUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+      previewUrl: ytInput.trim(),
+      genre: 'YouTube',
+      style: 'Web Request',
+      energyLevel: 'medium',
+      sourceProvider: 'catalog'
+    };
+
+    await addSong(youtubeSong);
+    setYtModalOpen(false);
+    setYtInput('');
+    setYtSearch('');
+    setYtBrowserUrl('https://www.youtube.com');
+  }
+
   if (!data) {
     return (
       <div className="panel">
@@ -147,6 +205,19 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
         <div className="field">
           <label htmlFor="songSearch">Search songs</label>
           <input id="songSearch" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Apple Music or fallback catalog" />
+          <button
+            className="btn"
+            style={{ marginTop: 8 }}
+            type="button"
+            onClick={() => {
+              setYtModalOpen(true);
+              setYtError('');
+              setYtSearch('');
+              setYtBrowserUrl('https://www.youtube.com');
+            }}
+          >
+            Add Song
+          </button>
         </div>
 
         {notice ? <div className="pill" style={{ color: 'var(--success)' }}>{notice}</div> : null}
@@ -197,6 +268,60 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
           </div>
         ) : null}
       </div>
+
+      {/* YouTube Song Modal */}
+      <Modal open={ytModalOpen} onClose={() => { setYtModalOpen(false); setYtError(''); }}>
+        <h3>Add a YouTube Song</h3>
+        <p className="subtle" style={{ marginBottom: 8 }}>Search in YouTube below, then paste the song URL and click Add Song.</p>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input
+            type="text"
+            placeholder="Search YouTube"
+            value={ytSearch}
+            onChange={(e) => setYtSearch(e.target.value)}
+            style={{ width: '100%' }}
+          />
+          <button
+            className="btn secondary"
+            type="button"
+            onClick={() => {
+              const q = ytSearch.trim();
+              setYtBrowserUrl(q ? `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` : 'https://www.youtube.com');
+            }}
+          >
+            Search
+          </button>
+        </div>
+        <iframe
+          title="YouTube browser"
+          src={ytBrowserUrl}
+          style={{ width: '100%', height: 300, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, marginBottom: 8 }}
+          loading="lazy"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+        <input
+          type="text"
+          placeholder="Paste selected YouTube URL here"
+          value={ytInput}
+          onChange={e => setYtInput(e.target.value)}
+          style={{ width: '100%', marginBottom: 8 }}
+        />
+        {extractYoutubeId(ytInput) ? (
+          <div style={{ margin: '8px 0' }}>
+            <iframe
+              width="320"
+              height="180"
+              src={`https://www.youtube.com/embed/${extractYoutubeId(ytInput)}`}
+              title="YouTube preview"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        ) : null}
+        {ytError && <div className="pill" style={{ color: 'var(--danger)' }}>{ytError}</div>}
+        <button className="btn" style={{ marginTop: 8 }} onClick={addYouTubeSong}>Add Song</button>
+      </Modal>
 
       {/* ── Party Stats ── */}
       <div className="split-grid">

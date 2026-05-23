@@ -12,6 +12,7 @@ export async function POST(request: Request) {
         albumName?: string;
         appleMusicId?: string;
         artworkUrl?: string;
+        previewUrl?: string;
         durationMs?: number;
         bpm?: number;
         genre?: string;
