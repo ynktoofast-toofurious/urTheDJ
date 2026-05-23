@@ -14,13 +14,10 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@types/pg": "^8.20.0",
-    "aws-sdk": "^2.1692.0",
     "dotenv": "^17.4.2",
     "next": "^16.2.6",
     "pg": "^8.21.0",
     "prisma": "^7.8.0",
-    "puppeteer": "^25.0.4",
-    "puppeteer-core": "^25.0.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

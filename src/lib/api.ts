@@ -43,13 +43,3 @@ export async function submitSongRequest(input: { sessionId: string; requestedBy?
 
   return readJson<{ request: SongRequest; duplicate?: SongRequest }>(response);
 }
-
-// Request YouTube download and S3 upload
-export async function requestYouTubeDownload(youtubeUrl: string) {
-  const response = await fetch('/api/youtube-download', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ youtubeUrl })
-  });
-  return readJson<{ s3Url?: string; error?: string; time?: string }>(response);
-}
