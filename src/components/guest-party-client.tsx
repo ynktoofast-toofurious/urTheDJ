@@ -31,7 +31,8 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
   const [ytModalOpen, setYtModalOpen] = useState(false);
   const [ytInput, setYtInput] = useState('');
   const [ytError, setYtError] = useState('');
-  const [ytWindowOpened, setYtWindowOpened] = useState(false);
+  const [ytSearch, setYtSearch] = useState('');
+  const [ytBrowserUrl, setYtBrowserUrl] = useState('https://www.youtube.com');
 
   async function loadView() {
     try {
@@ -163,22 +164,8 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
     await addSong(youtubeSong);
     setYtModalOpen(false);
     setYtInput('');
-    setYtWindowOpened(false);
-  }
-
-  function openYoutubePopup() {
-    const popup = window.open(
-      'https://www.youtube.com',
-      'yt_song_picker',
-      'popup=yes,width=1100,height=760,left=160,top=80,resizable=yes,scrollbars=yes'
-    );
-    if (!popup) {
-      setYtError('Popup was blocked by your browser. Please allow popups and try again.');
-      return;
-    }
-    setYtError('');
-    setYtWindowOpened(true);
-    popup.focus();
+    setYtSearch('');
+    setYtBrowserUrl('https://www.youtube.com');
   }
 
   if (!data) {
@@ -225,8 +212,8 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
             onClick={() => {
               setYtModalOpen(true);
               setYtError('');
-              setYtWindowOpened(false);
-              setYtInput('');
+              setYtSearch('');
+              setYtBrowserUrl('https://www.youtube.com');
             }}
           >
             Add Song
@@ -285,23 +272,39 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
       {/* YouTube Song Modal */}
       <Modal open={ytModalOpen} onClose={() => { setYtModalOpen(false); setYtError(''); }}>
         <h3>Add a YouTube Song</h3>
-        <p className="subtle" style={{ marginBottom: 8 }}>
-          Open YouTube in a real popup browser window, find your song, copy its URL, then paste it here.
-        </p>
-        <button className="btn secondary" type="button" onClick={openYoutubePopup}>
-          Open YouTube Browser
-        </button>
-        {ytWindowOpened ? (
-          <p className="subtle" style={{ marginTop: 8 }}>
-            YouTube popup opened. Search your song there and paste the link below.
-          </p>
-        ) : null}
+        <p className="subtle" style={{ marginBottom: 8 }}>Search in YouTube below, then paste the song URL and click Add Song.</p>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input
+            type="text"
+            placeholder="Search YouTube"
+            value={ytSearch}
+            onChange={(e) => setYtSearch(e.target.value)}
+            style={{ width: '100%' }}
+          />
+          <button
+            className="btn secondary"
+            type="button"
+            onClick={() => {
+              const q = ytSearch.trim();
+              setYtBrowserUrl(q ? `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` : 'https://www.youtube.com');
+            }}
+          >
+            Search
+          </button>
+        </div>
+        <iframe
+          title="YouTube browser"
+          src={ytBrowserUrl}
+          style={{ width: '100%', height: 300, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, marginBottom: 8 }}
+          loading="lazy"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
         <input
           type="text"
           placeholder="Paste selected YouTube URL here"
           value={ytInput}
           onChange={e => setYtInput(e.target.value)}
-          style={{ width: '100%', marginTop: 8, marginBottom: 8 }}
+          style={{ width: '100%', marginBottom: 8 }}
         />
         {extractYoutubeId(ytInput) ? (
           <div style={{ margin: '8px 0' }}>
