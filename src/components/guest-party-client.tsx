@@ -129,8 +129,9 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
       </div>
 
       {/* ── Request a Song (right after header) ── */}
-      <div className="panel stack">
+      <div className="panel stack guest-request-spotlight">
         <h3 className="section-title" style={{ fontSize: '1.2rem' }}>Request a Song</h3>
+        <p className="guest-request-kicker">This is your moment. Pick a track and send it to the DJ.</p>
         <div className="field">
           <label htmlFor="requestedBy">Your name</label>
           {data.session.guestList?.length ? (
@@ -146,7 +147,13 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
         </div>
         <div className="field">
           <label htmlFor="songSearch">Search songs</label>
-          <input id="songSearch" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Apple Music or fallback catalog" />
+          <input
+            id="songSearch"
+            className="focus-search-input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search and claim the next vibe..."
+          />
         </div>
 
         {notice ? <div className="pill" style={{ color: 'var(--success)' }}>{notice}</div> : null}
@@ -155,6 +162,8 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
         {isPending && query.trim().length >= 2 && results.length === 0 && (
           <div className="search-loading">Searching Apple Music…</div>
         )}
+
+        <p className="guest-add-hint">Tap <strong>Add Song</strong> on any result to push it to the DJ queue.</p>
 
         <div className="search-list">
           {results.map((song) => (
@@ -181,7 +190,7 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
                 <div className="pill"><strong>{song.style ?? 'style'}</strong><span>style</span></div>
               </div>
               <div className="result-actions" style={{ marginTop: 12 }}>
-                <button className="btn full-width" disabled={isPending} onClick={() => {
+                <button className="btn full-width guest-add-song-btn" disabled={isPending} onClick={() => {
                   setSelectedSong(song);
                   void addSong(song);
                 }}>Add Song</button>
@@ -206,6 +215,7 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
             <div className="stat"><span className="tiny">Status</span><strong className="value">{data.session.status}</strong></div>
             <div className="stat"><span className="tiny">Requests</span><strong className="value">{data.nextSongs.length}</strong></div>
           </div>
+          <p className="subtle" style={{ marginTop: '0.2rem' }}>Only the DJ can start the party and control playback.</p>
 
           <div className="card stack">
             <strong>Last 3 songs played</strong>

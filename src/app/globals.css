@@ -325,6 +325,47 @@ button { cursor: pointer; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ─── Guest request focus zone ─────────────────────────────── */
+.guest-request-spotlight {
+  position: relative;
+  border: 1px solid rgba(124, 247, 212, 0.45);
+  background:
+    linear-gradient(160deg, rgba(124, 247, 212, 0.09), rgba(127, 156, 255, 0.07) 60%, rgba(10, 16, 36, 0.82)),
+    var(--panel);
+}
+
+.guest-request-kicker {
+  margin: -4px 0 4px;
+  color: #d9fff5;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.focus-search-input {
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(124, 247, 212, 0.08) !important;
+  border: 1px solid rgba(124, 247, 212, 0.35) !important;
+  box-shadow: 0 0 0 4px rgba(124, 247, 212, 0.08);
+}
+
+.focus-search-input:focus {
+  border-color: rgba(124, 247, 212, 0.85) !important;
+  box-shadow: 0 0 0 5px rgba(124, 247, 212, 0.16);
+}
+
+.guest-add-hint {
+  margin: 6px 0 2px;
+  color: #d8e4ff;
+  font-size: 0.9rem;
+}
+
+.guest-add-song-btn {
+  font-size: 1.03rem;
+  letter-spacing: 0.01em;
+  box-shadow: 0 12px 28px rgba(124, 247, 212, 0.28);
+}
+
 /* ─── Login page ────────────────────────────────────────────── */
 .login-page {
   display: flex;
