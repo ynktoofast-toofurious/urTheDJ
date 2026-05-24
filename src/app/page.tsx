@@ -11,7 +11,7 @@ export default function HomePage() {
         </p>
         <div className="hero-actions">
           <Link className="btn" href="/admin/login">Login</Link>
-          <Link className="btn secondary" href="/admin/create-party">Create Party</Link>
+          <Link className="btn secondary" href="/signup">Sign Up</Link>
         </div>
       </section>
 
