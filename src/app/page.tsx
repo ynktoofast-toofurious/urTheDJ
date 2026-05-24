@@ -10,8 +10,8 @@ export default function HomePage() {
           Create a session, let guests search Apple Music, and keep the dance floor moving with a smart queue that sorts by BPM, style, energy, and timing — updated live on every device.
         </p>
         <div className="hero-actions">
-          <Link className="btn" href="/admin/create-party">Start a Party</Link>
-          <Link className="btn secondary" href="/party/demo">Guest Demo</Link>
+          <Link className="btn" href="/admin/login">Login</Link>
+          <Link className="btn secondary" href="/admin/create-party">Create Party</Link>
         </div>
       </section>
 

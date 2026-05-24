@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, UpdateCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamo, SESSIONS_TABLE, REQUESTS_TABLE } from './dynamo';
 import { catalog } from './catalog';
 import { emitPartyUpdate } from './event-bus';
@@ -282,6 +282,12 @@ export async function createPartySession(input: SessionInput) {
   const created = await refreshQueueState(sessionId);
   emitPartyUpdate(sessionId);
   return created;
+}
+
+export async function listPartySessions() {
+  const result = await dynamo.send(new ScanCommand({ TableName: SESSIONS_TABLE }));
+  const sessions = (result.Items ?? []).map((item) => mapSession(item as unknown as DbSession));
+  return sessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function startPartySession(sessionId: string) {

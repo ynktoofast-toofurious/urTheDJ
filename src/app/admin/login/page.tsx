@@ -43,7 +43,7 @@ function LoginForm() {
       body: JSON.stringify({ pin: code }),
     });
     if (res.ok) {
-      const dest = searchParams.get('from') ?? '/admin/create-party';
+      const dest = searchParams.get('from') ?? '/admin';
       router.replace(dest);
     } else {
       setError('Wrong PIN — try again');
