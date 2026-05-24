@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import Link from 'next/link';
+import { TopNav } from '@/components/top-nav';
 import './globals.css';
 
 const inter = Inter({
@@ -18,12 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={inter.variable}>
       <body>
-        <nav className="top-nav">
-          <div className="app-frame nav-inner">
-            <Link className="nav-logo" href="/">urTheDJ</Link>
-            <Link className="btn secondary nav-cta" href="/admin/create-party">Start a Party</Link>
-          </div>
-        </nav>
+        <TopNav />
         <div className="page-shell">{children}</div>
       </body>
     </html>
