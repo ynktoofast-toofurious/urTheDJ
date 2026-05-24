@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useRef, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 function LoginForm() {
   const [pin, setPin] = useState(['', '', '', '']);
@@ -9,7 +9,6 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     inputs.current[0]?.focus();
@@ -43,8 +42,7 @@ function LoginForm() {
       body: JSON.stringify({ pin: code }),
     });
     if (res.ok) {
-      const dest = searchParams.get('from') ?? '/admin';
-      router.replace(dest);
+      router.replace('/admin');
     } else {
       setError('Wrong PIN — try again');
       setPin(['', '', '', '']);

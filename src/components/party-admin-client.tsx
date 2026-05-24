@@ -193,6 +193,13 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className={`pill ${data.session.status}`}><strong>{data.session.status}</strong></div>
+            <button
+              className="btn secondary"
+              style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+              onClick={() => { window.location.href = '/admin'; }}
+            >
+              Back to Parties
+            </button>
             <button className="btn secondary" style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
               onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/admin/login'; }}>
               Log out
