@@ -35,7 +35,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState('');
   const [selectedSongId, setSelectedSongId] = useState('');
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<'nowplaying' | 'queue' | 'pending'>('nowplaying');
+  const [activeTab, setActiveTab] = useState<'nowplaying' | 'playlist' | 'pending'>('nowplaying');
   const [isPlaying, setIsPlaying] = useState(false);
 
   // DJ song search
@@ -218,7 +218,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
         {/* Tab bar */}
         <div className="tab-bar" style={{ display: 'flex', gap: '0', marginTop: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          {(['nowplaying', 'queue', 'pending'] as const).map((tab) => (
+          {(['nowplaying', 'playlist', 'pending'] as const).map((tab) => (
             <button key={tab}
               onClick={() => setActiveTab(tab)}
               style={{
@@ -233,7 +233,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 letterSpacing: '0.02em',
                 textTransform: 'capitalize'
               }}>
-              {tab === 'nowplaying' ? '🎵 Now Playing' : tab === 'queue' ? '🎛 Queue' : `⏳ Pending (${data.pendingRequests.length})`}
+              {tab === 'nowplaying' ? '🎵 Now Playing' : tab === 'playlist' ? `📚 Playlist (${data.queue.length})` : `⏳ Pending (${data.pendingRequests.length})`}
             </button>
           ))}
         </div>
@@ -429,14 +429,15 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
-      {/* ── QUEUE TAB ── */}
-      {activeTab === 'queue' && (
+      {/* ── PLAYLIST TAB ── */}
+      {activeTab === 'playlist' && (
         <div className="panel stack">
           <div className="status-line">
-            <h3 className="section-title">Full Queue</h3>
+            <h3 className="section-title">Full Playlist</h3>
             <button className="btn secondary" disabled={isPending || !nextSong} onClick={() => postAction('forceSync', { requestId: nextSong?.requestId })}>Force Sync Current Song</button>
           </div>
-          {data.queue.length === 0 && <p className="subtle">Queue is empty. Add songs or wait for guest requests.</p>}
+          <p className="subtle">Every song requested for this party is shown here, including pending, approved, playing, played, skipped, and rejected tracks.</p>
+          {data.queue.length === 0 && <p className="subtle">Playlist is empty. Add songs or wait for guest requests.</p>}
           <div className="queue-list">
             {data.queue.map((request) => (
               <div className="queue-row" key={request.requestId}>

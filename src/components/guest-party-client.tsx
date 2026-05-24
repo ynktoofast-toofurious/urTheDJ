@@ -215,7 +215,7 @@ export function GuestPartyClient({ sessionId }: { sessionId: string }) {
             <div className="stat"><span className="tiny">Status</span><strong className="value">{data.session.status}</strong></div>
             <div className="stat"><span className="tiny">Requests</span><strong className="value">{data.nextSongs.length}</strong></div>
           </div>
-          <p className="subtle" style={{ marginTop: '0.2rem' }}>Only the DJ can start the party and control playback.</p>
+          <p className="subtle" style={{ marginTop: '0.2rem' }}>Playback starts from the DJ dashboard. Guests can only submit requests.</p>
 
           <div className="card stack">
             <strong>Last 3 songs played</strong>
