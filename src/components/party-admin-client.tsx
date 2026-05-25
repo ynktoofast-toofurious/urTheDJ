@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { fetchAdminDashboard, searchSongs, submitSongRequest } from '@/lib/api';
+import { catalog } from '@/lib/catalog';
 import type { AdminDashboardModel, SearchSongResult, SongRequest } from '@/lib/types';
 
 type ActionName = 'start' | 'pause' | 'end' | 'lock' | 'reopen' | 'approve' | 'reject' | 'playing' | 'played' | 'skip' | 'forceSync' | 'reorder';
@@ -30,6 +31,24 @@ function ScoreChip({ request }: { request: SongRequest }) {
   );
 }
 
+type MixerTrack = {
+  id: string;
+  title: string;
+  artist: string;
+  artworkUrl?: string;
+  previewUrl?: string;
+  sourceProvider: 'apple-music' | 'catalog';
+};
+
+function dedupeMixerTracks(tracks: MixerTrack[]) {
+  const seen = new Set<string>();
+  return tracks.filter((track) => {
+    if (seen.has(track.id)) return false;
+    seen.add(track.id);
+    return true;
+  });
+}
+
 export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [data, setData] = useState<AdminDashboardModel | null>(null);
   const [error, setError] = useState('');
@@ -37,6 +56,11 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<'nowplaying' | 'playlist' | 'pending'>('nowplaying');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [crossfader, setCrossfader] = useState(50);
+  const [deckATrackId, setDeckATrackId] = useState('');
+  const [deckBTrackId, setDeckBTrackId] = useState('');
+  const deckAAudioRef = useRef<HTMLAudioElement | null>(null);
+  const deckBAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // DJ song search
   const [djQuery, setDjQuery] = useState('');
@@ -134,6 +158,71 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
     () => data?.queue.find((request) => request.requestId === selectedSongId) ?? data?.nextSongs[0] ?? data?.currentSong,
     [data, selectedSongId]
   );
+
+  const appleMusicLibrary = useMemo(() => {
+    if (!data) return [] as MixerTrack[];
+    const tracks = [data.currentSong, ...data.queue, ...data.pendingRequests, ...data.approvedSongs]
+      .filter((track): track is SongRequest => Boolean(track))
+      .filter((track) => track.sourceProvider === 'apple-music')
+      .map((track) => ({
+        id: track.requestId,
+        title: track.songTitle,
+        artist: track.artistName,
+        artworkUrl: track.artworkUrl,
+        previewUrl: track.previewUrl,
+        sourceProvider: 'apple-music' as const
+      }));
+    return dedupeMixerTracks(tracks);
+  }, [data]);
+
+  const localMusicLibrary = useMemo(() => {
+    if (!data) return [] as MixerTrack[];
+    const queueLocal = [data.currentSong, ...data.queue, ...data.pendingRequests, ...data.approvedSongs]
+      .filter((track): track is SongRequest => Boolean(track))
+      .filter((track) => track.sourceProvider === 'catalog')
+      .map((track) => ({
+        id: track.requestId,
+        title: track.songTitle,
+        artist: track.artistName,
+        artworkUrl: track.artworkUrl,
+        previewUrl: track.previewUrl,
+        sourceProvider: 'catalog' as const
+      }));
+
+    if (queueLocal.length > 0) return dedupeMixerTracks(queueLocal);
+
+    return catalog.map((track) => ({
+      id: track.appleMusicId ?? `${track.songTitle}-${track.artistName}`,
+      title: track.songTitle,
+      artist: track.artistName,
+      artworkUrl: track.artworkUrl,
+      previewUrl: track.previewUrl,
+      sourceProvider: 'catalog' as const
+    }));
+  }, [data]);
+
+  const deckATrack = useMemo(
+    () => appleMusicLibrary.find((track) => track.id === deckATrackId) ?? appleMusicLibrary[0],
+    [appleMusicLibrary, deckATrackId]
+  );
+
+  const deckBTrack = useMemo(
+    () => localMusicLibrary.find((track) => track.id === deckBTrackId) ?? localMusicLibrary[0],
+    [localMusicLibrary, deckBTrackId]
+  );
+
+  useEffect(() => {
+    if (!deckATrackId && appleMusicLibrary[0]) setDeckATrackId(appleMusicLibrary[0].id);
+  }, [appleMusicLibrary, deckATrackId]);
+
+  useEffect(() => {
+    if (!deckBTrackId && localMusicLibrary[0]) setDeckBTrackId(localMusicLibrary[0].id);
+  }, [localMusicLibrary, deckBTrackId]);
+
+  useEffect(() => {
+    if (deckAAudioRef.current) deckAAudioRef.current.volume = Math.max(0, Math.min(1, (100 - crossfader) / 100));
+    if (deckBAudioRef.current) deckBAudioRef.current.volume = Math.max(0, Math.min(1, crossfader / 100));
+  }, [crossfader, deckATrack?.id, deckBTrack?.id]);
 
   async function postAction(action: ActionName, payload: Record<string, unknown> = {}) {
     setError('');
@@ -278,151 +367,249 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
       {/* ── NOW PLAYING TAB ── */}
       {activeTab === 'nowplaying' && (
-        <div className="split-grid">
-          <div className="panel stack">
-            <div className="metrics">
-              <div className="stat"><span className="tiny">Queue</span><strong className="value">{data.queue.length}</strong></div>
-              <div className="stat"><span className="tiny">Pending</span><strong className="value">{data.pendingRequests.length}</strong></div>
-              <div className="stat"><span className="tiny">Approved</span><strong className="value">{data.approvedSongs.length}</strong></div>
+        <div className="stack">
+          <div className="split-grid">
+            <div className="panel stack">
+              <div className="metrics">
+                <div className="stat"><span className="tiny">Queue</span><strong className="value">{data.queue.length}</strong></div>
+                <div className="stat"><span className="tiny">Pending</span><strong className="value">{data.pendingRequests.length}</strong></div>
+                <div className="stat"><span className="tiny">Approved</span><strong className="value">{data.approvedSongs.length}</strong></div>
+              </div>
+
+              {/* Current song player card */}
+              {data.currentSong ? (
+                <div className="card stack" style={{ textAlign: 'center' }}>
+                  {data.currentSong.artworkUrl && (
+                    <img
+                      src={data.currentSong.artworkUrl}
+                      alt={data.currentSong.albumName ?? data.currentSong.songTitle}
+                      style={{ width: '100%', maxWidth: 280, margin: '0 auto', borderRadius: 12, display: 'block' }}
+                    />
+                  )}
+                  <div style={{ marginTop: '1rem' }}>
+                    <p className="track-title" style={{ fontSize: '1.3rem' }}>{data.currentSong.songTitle}</p>
+                    <p className="track-subtitle">{data.currentSong.artistName}{data.currentSong.albumName ? ` • ${data.currentSong.albumName}` : ''}</p>
+                    <p className="subtle" style={{ marginTop: '0.25rem' }}>Requested by {data.currentSong.requestedBy}</p>
+                  </div>
+
+                  {/* 30-second preview player */}
+                  {data.currentSong.previewUrl && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <audio
+                        key={data.currentSong.requestId}
+                        controls
+                        loop
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                        onEnded={() => setIsPlaying(false)}
+                        style={{ width: '100%', borderRadius: 8 }}
+                      >
+                        <source src={data.currentSong.previewUrl} type="audio/mpeg" />
+                      </audio>
+                      <p className="subtle" style={{ fontSize: '0.72rem', marginTop: '0.35rem' }}>30-second Apple Music preview — loops while DJ previews</p>
+                    </div>
+                  )}
+
+                  <div className="row-actions" style={{ marginTop: '1rem', justifyContent: 'center' }}>
+                    <button className="btn" disabled={isPending} onClick={() => postAction('playing', { requestId: data.currentSong?.requestId })}>
+                      {isPlaying ? '▶ Now Playing' : '▶ Mark as Playing'}
+                    </button>
+                    <button className="btn secondary" disabled={isPending} onClick={() => postAction('played', { requestId: data.currentSong?.requestId })}>✓ Mark Played</button>
+                    <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: data.currentSong?.requestId })}>⏭ Skip</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="card stack" style={{ textAlign: 'center', padding: '2.5rem' }}>
+                  <p style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎧</p>
+                  <p className="section-title">Nothing is playing yet</p>
+                  <p className="subtle">Start the party, then mark a song from the queue as playing.</p>
+                  {data.session.status === 'draft' && (
+                    <button className="btn" style={{ marginTop: '1rem' }} disabled={isPending} onClick={() => postAction('start')}>▶ Start the Party</button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Current song player card */}
-            {data.currentSong ? (
-              <div className="card stack" style={{ textAlign: 'center' }}>
-                {data.currentSong.artworkUrl && (
-                  <img
-                    src={data.currentSong.artworkUrl}
-                    alt={data.currentSong.albumName ?? data.currentSong.songTitle}
-                    style={{ width: '100%', maxWidth: 280, margin: '0 auto', borderRadius: 12, display: 'block' }}
+            {/* Right: Up Next + QR */}
+            <div className="panel stack">
+              <div className="card stack">
+                <strong>Up Next</strong>
+                <div className="timeline-list">
+                  {data.nextSongs.length ? data.nextSongs.map((req) => (
+                    <div className="queue-row" key={req.requestId}>
+                      <div className="row-top">
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                          {req.artworkUrl && <img src={req.artworkUrl} alt={req.songTitle} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover' }} />}
+                          <div>
+                            <p className="track-title">{req.songTitle}</p>
+                            <p className="track-subtitle">{req.artistName} • {req.requestedBy}</p>
+                          </div>
+                        </div>
+                        <span className={`badge ${req.status}`}>{statusLabels[req.status]}</span>
+                      </div>
+                      <div className="row-actions">
+                        <button className="btn secondary" disabled={isPending} onClick={() => postAction('playing', { requestId: req.requestId })}>▶ Play This</button>
+                        <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: req.requestId })}>⏭ Skip</button>
+                      </div>
+                    </div>
+                  )) : <p className="subtle">No songs in the queue yet.</p>}
+                </div>
+              </div>
+
+              <div className="card stack">
+                <strong>Guest QR Code</strong>
+                <p className="subtle" style={{ fontSize: '0.78rem' }}>Guests scan this to request songs.</p>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingTop: 8 }}>
+                  <QRCodeSVG
+                    value={typeof window !== 'undefined' ? `${window.location.origin}/party/${sessionId}` : `/party/${sessionId}`}
+                    size={180} bgColor="transparent" fgColor="currentColor" level="M"
                   />
-                )}
-                <div style={{ marginTop: '1rem' }}>
-                  <p className="track-title" style={{ fontSize: '1.3rem' }}>{data.currentSong.songTitle}</p>
-                  <p className="track-subtitle">{data.currentSong.artistName}{data.currentSong.albumName ? ` • ${data.currentSong.albumName}` : ''}</p>
-                  <p className="subtle" style={{ marginTop: '0.25rem' }}>Requested by {data.currentSong.requestedBy}</p>
+                  <code style={{ fontSize: '0.72rem', opacity: 0.6 }}>/party/{sessionId}</code>
                 </div>
+              </div>
 
-                {/* 30-second preview player */}
-                {data.currentSong.previewUrl && (
-                  <div style={{ marginTop: '1rem' }}>
-                    <audio
-                      key={data.currentSong.requestId}
-                      controls
-                      loop
-                      onPlay={() => setIsPlaying(true)}
-                      onPause={() => setIsPlaying(false)}
-                      onEnded={() => setIsPlaying(false)}
-                      style={{ width: '100%', borderRadius: 8 }}
-                    >
-                      <source src={data.currentSong.previewUrl} type="audio/mpeg" />
-                    </audio>
-                    <p className="subtle" style={{ fontSize: '0.72rem', marginTop: '0.35rem' }}>30-second Apple Music preview — loops while DJ previews</p>
-                  </div>
-                )}
-
-                <div className="row-actions" style={{ marginTop: '1rem', justifyContent: 'center' }}>
-                  <button className="btn" disabled={isPending} onClick={() => postAction('playing', { requestId: data.currentSong?.requestId })}>
-                    {isPlaying ? '▶ Now Playing' : '▶ Mark as Playing'}
+              <div className="card stack">
+                <strong>Guest List</strong>
+                <div className="field" style={{ marginTop: '0.25rem' }}>
+                  <input
+                    value={newGuestName}
+                    onChange={(e) => setNewGuestName(e.target.value)}
+                    placeholder="Add guest name"
+                  />
+                </div>
+                <div className="row-actions">
+                  <button
+                    className="btn secondary"
+                    disabled={guestListPending || !newGuestName.trim()}
+                    onClick={() => {
+                      const updated = [...(data.session.guestList ?? []), newGuestName.trim()];
+                      setNewGuestName('');
+                      saveGuestList(updated);
+                    }}
+                  >
+                    Add Guest
                   </button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('played', { requestId: data.currentSong?.requestId })}>✓ Mark Played</button>
-                  <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: data.currentSong?.requestId })}>⏭ Skip</button>
+                </div>
+                <div className="timeline-list">
+                  {(data.session.guestList ?? []).length ? (data.session.guestList ?? []).map((name) => (
+                    <div className="pill" key={name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong>{name}</strong>
+                      <button
+                        className="btn secondary"
+                        style={{ padding: '0.15rem 0.5rem', fontSize: '0.72rem' }}
+                        disabled={guestListPending}
+                        onClick={() => saveGuestList((data.session.guestList ?? []).filter((n) => n !== name))}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )) : <p className="subtle">No guests added yet.</p>}
                 </div>
               </div>
-            ) : (
-              <div className="card stack" style={{ textAlign: 'center', padding: '2.5rem' }}>
-                <p style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎧</p>
-                <p className="section-title">Nothing is playing yet</p>
-                <p className="subtle">Start the party, then mark a song from the queue as playing.</p>
-                {data.session.status === 'draft' && (
-                  <button className="btn" style={{ marginTop: '1rem' }} disabled={isPending} onClick={() => postAction('start')}>▶ Start the Party</button>
-                )}
+
+              <div className="card stack">
+                <strong>Last played</strong>
+                <div className="timeline-list">
+                  {data.lastPlayed.length ? data.lastPlayed.map((req) => (
+                    <div className="pill" key={req.requestId}><strong>{req.songTitle}</strong><span>by {req.artistName}</span></div>
+                  )) : <p className="subtle">No songs played yet.</p>}
+                </div>
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Right: Up Next + QR */}
-          <div className="panel stack">
-            <div className="card stack">
-              <strong>Up Next</strong>
+          <div className="split-grid" style={{ gridTemplateColumns: '1.2fr 0.9fr 1.2fr' }}>
+            <div className="panel stack">
+              <div className="status-line">
+                <h3 className="section-title">Apple Music Playlist</h3>
+                <span className="badge apple-music">{appleMusicLibrary.length} tracks</span>
+              </div>
               <div className="timeline-list">
-                {data.nextSongs.length ? data.nextSongs.map((req) => (
-                  <div className="queue-row" key={req.requestId}>
+                {appleMusicLibrary.length ? appleMusicLibrary.map((track) => (
+                  <div className="queue-row" key={track.id}>
                     <div className="row-top">
                       <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        {req.artworkUrl && <img src={req.artworkUrl} alt={req.songTitle} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover' }} />}
+                        {track.artworkUrl && <img src={track.artworkUrl} alt={track.title} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover' }} />}
                         <div>
-                          <p className="track-title">{req.songTitle}</p>
-                          <p className="track-subtitle">{req.artistName} • {req.requestedBy}</p>
+                          <p className="track-title">{track.title}</p>
+                          <p className="track-subtitle">{track.artist}</p>
                         </div>
                       </div>
-                      <span className={`badge ${req.status}`}>{statusLabels[req.status]}</span>
-                    </div>
-                    <div className="row-actions">
-                      <button className="btn secondary" disabled={isPending} onClick={() => postAction('playing', { requestId: req.requestId })}>▶ Play This</button>
-                      <button className="btn secondary" disabled={isPending} onClick={() => postAction('skip', { requestId: req.requestId })}>⏭ Skip</button>
+                      <button className="btn secondary" disabled={!track.previewUrl} onClick={() => setDeckATrackId(track.id)}>
+                        Load A
+                      </button>
                     </div>
                   </div>
-                )) : <p className="subtle">No songs in the queue yet.</p>}
+                )) : <p className="subtle">No Apple Music tracks loaded into this party yet.</p>}
               </div>
             </div>
 
-            <div className="card stack">
-              <strong>Guest QR Code</strong>
-              <p className="subtle" style={{ fontSize: '0.78rem' }}>Guests scan this to request songs.</p>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingTop: 8 }}>
-                <QRCodeSVG
-                  value={typeof window !== 'undefined' ? `${window.location.origin}/party/${sessionId}` : `/party/${sessionId}`}
-                  size={180} bgColor="transparent" fgColor="currentColor" level="M"
-                />
-                <code style={{ fontSize: '0.72rem', opacity: 0.6 }}>/party/{sessionId}</code>
+            <div className="panel stack" style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+              <p className="eyebrow">Virtual DJ Mixer</p>
+              <h3 className="section-title">Crossfader</h3>
+              <p className="subtle">Blend Deck A (Apple Music) into Deck B (Local Music).</p>
+              <div className="card stack" style={{ width: '100%', textAlign: 'left' }}>
+                <div className="status-line">
+                  <strong>Deck A</strong>
+                  <span className="badge apple-music">Apple</span>
+                </div>
+                <p className="track-title">{deckATrack?.title ?? 'Load an Apple Music track'}</p>
+                <p className="track-subtitle">{deckATrack?.artist ?? 'No track loaded'}</p>
+                <audio ref={deckAAudioRef} controls style={{ width: '100%' }}>
+                  {deckATrack?.previewUrl ? <source src={deckATrack.previewUrl} type="audio/mpeg" /> : null}
+                </audio>
               </div>
-            </div>
-
-            <div className="card stack">
-              <strong>Guest List</strong>
-              <div className="field" style={{ marginTop: '0.25rem' }}>
+              <div style={{ width: '100%', padding: '0.5rem 0' }}>
                 <input
-                  value={newGuestName}
-                  onChange={(e) => setNewGuestName(e.target.value)}
-                  placeholder="Add guest name"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={crossfader}
+                  onChange={(event) => setCrossfader(Number(event.target.value))}
+                  style={{ width: '100%' }}
                 />
+                <div className="status-line" style={{ marginTop: '0.35rem' }}>
+                  <span className="tiny">A</span>
+                  <span className="tiny">Crossfader: {crossfader}</span>
+                  <span className="tiny">B</span>
+                </div>
               </div>
-              <div className="row-actions">
-                <button
-                  className="btn secondary"
-                  disabled={guestListPending || !newGuestName.trim()}
-                  onClick={() => {
-                    const updated = [...(data.session.guestList ?? []), newGuestName.trim()];
-                    setNewGuestName('');
-                    saveGuestList(updated);
-                  }}
-                >
-                  Add Guest
-                </button>
-              </div>
-              <div className="timeline-list">
-                {(data.session.guestList ?? []).length ? (data.session.guestList ?? []).map((name) => (
-                  <div className="pill" key={name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong>{name}</strong>
-                    <button
-                      className="btn secondary"
-                      style={{ padding: '0.15rem 0.5rem', fontSize: '0.72rem' }}
-                      disabled={guestListPending}
-                      onClick={() => saveGuestList((data.session.guestList ?? []).filter((n) => n !== name))}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )) : <p className="subtle">No guests added yet.</p>}
+              <div className="card stack" style={{ width: '100%', textAlign: 'left' }}>
+                <div className="status-line">
+                  <strong>Deck B</strong>
+                  <span className="badge built-in">Local</span>
+                </div>
+                <p className="track-title">{deckBTrack?.title ?? 'Load a local track'}</p>
+                <p className="track-subtitle">{deckBTrack?.artist ?? 'No track loaded'}</p>
+                <audio ref={deckBAudioRef} controls style={{ width: '100%' }}>
+                  {deckBTrack?.previewUrl ? <source src={deckBTrack.previewUrl} type="audio/mpeg" /> : null}
+                </audio>
+                {!deckBTrack?.previewUrl ? <p className="subtle">This local track has no audio preview yet. The deck is ready for local file-backed tracks.</p> : null}
               </div>
             </div>
 
-            <div className="card stack">
-              <strong>Last played</strong>
+            <div className="panel stack">
+              <div className="status-line">
+                <h3 className="section-title">Local Music</h3>
+                <span className="badge built-in">{localMusicLibrary.length} tracks</span>
+              </div>
               <div className="timeline-list">
-                {data.lastPlayed.length ? data.lastPlayed.map((req) => (
-                  <div className="pill" key={req.requestId}><strong>{req.songTitle}</strong><span>by {req.artistName}</span></div>
-                )) : <p className="subtle">No songs played yet.</p>}
+                {localMusicLibrary.length ? localMusicLibrary.map((track) => (
+                  <div className="queue-row" key={track.id}>
+                    <div className="row-top">
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        {track.artworkUrl && <img src={track.artworkUrl} alt={track.title} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover' }} />}
+                        <div>
+                          <p className="track-title">{track.title}</p>
+                          <p className="track-subtitle">{track.artist}</p>
+                        </div>
+                      </div>
+                      <button className="btn secondary" onClick={() => setDeckBTrackId(track.id)}>
+                        Load B
+                      </button>
+                    </div>
+                  </div>
+                )) : <p className="subtle">No local tracks available.</p>}
               </div>
             </div>
           </div>
