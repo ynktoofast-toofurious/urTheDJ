@@ -54,7 +54,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState('');
   const [selectedSongId, setSelectedSongId] = useState('');
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<'nowplaying' | 'playlist' | 'pending'>('nowplaying');
+  const [activeTab, setActiveTab] = useState<'nowplaying' | 'mixer' | 'playlist' | 'pending'>('nowplaying');
   const [isPlaying, setIsPlaying] = useState(false);
   const [crossfader, setCrossfader] = useState(50);
   const [deckATrackId, setDeckATrackId] = useState('');
@@ -307,7 +307,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
         {/* Tab bar */}
         <div className="tab-bar" style={{ display: 'flex', gap: '0', marginTop: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          {(['nowplaying', 'playlist', 'pending'] as const).map((tab) => (
+          {(['nowplaying', 'mixer', 'playlist', 'pending'] as const).map((tab) => (
             <button key={tab}
               onClick={() => setActiveTab(tab)}
               style={{
@@ -322,7 +322,13 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 letterSpacing: '0.02em',
                 textTransform: 'capitalize'
               }}>
-              {tab === 'nowplaying' ? '🎵 Now Playing' : tab === 'playlist' ? `📚 Playlist (${data.queue.length})` : `⏳ Pending (${data.pendingRequests.length})`}
+              {tab === 'nowplaying'
+                ? '🎵 Now Playing'
+                : tab === 'mixer'
+                  ? '🎚️ Virtual DJ Mixer'
+                  : tab === 'playlist'
+                    ? `📚 Playlist (${data.queue.length})`
+                    : `⏳ Pending (${data.pendingRequests.length})`}
             </button>
           ))}
         </div>
@@ -518,10 +524,65 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
             </div>
           </div>
 
-          <div className="split-grid" style={{ gridTemplateColumns: '1.2fr 0.9fr 1.2fr' }}>
+        </div>
+      )}
+
+      {/* ── MIXER TAB ── */}
+      {activeTab === 'mixer' && (
+        <div className="stack">
+          <div className="panel stack">
+            <p className="eyebrow">Virtual DJ Mixer</p>
+            <h3 className="section-title">Crossfader</h3>
+            <p className="subtle">Blend Deck A (Apple Music guest playlist) into Deck B (Local Music).</p>
+
+            <div className="split-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className="card stack" style={{ width: '100%', textAlign: 'left' }}>
+                <div className="status-line">
+                  <strong>Deck A</strong>
+                  <span className="badge apple-music">Apple</span>
+                </div>
+                <p className="track-title">{deckATrack?.title ?? 'Load an Apple Music track'}</p>
+                <p className="track-subtitle">{deckATrack?.artist ?? 'No track loaded'}</p>
+                <audio ref={deckAAudioRef} controls style={{ width: '100%' }}>
+                  {deckATrack?.previewUrl ? <source src={deckATrack.previewUrl} type="audio/mpeg" /> : null}
+                </audio>
+              </div>
+
+              <div className="card stack" style={{ width: '100%', textAlign: 'left' }}>
+                <div className="status-line">
+                  <strong>Deck B</strong>
+                  <span className="badge built-in">Local</span>
+                </div>
+                <p className="track-title">{deckBTrack?.title ?? 'Load a local track'}</p>
+                <p className="track-subtitle">{deckBTrack?.artist ?? 'No track loaded'}</p>
+                <audio ref={deckBAudioRef} controls style={{ width: '100%' }}>
+                  {deckBTrack?.previewUrl ? <source src={deckBTrack.previewUrl} type="audio/mpeg" /> : null}
+                </audio>
+                {!deckBTrack?.previewUrl ? <p className="subtle">This local track has no audio preview yet. The deck is ready for local file-backed tracks.</p> : null}
+              </div>
+            </div>
+
+            <div style={{ width: '100%', paddingTop: '0.5rem' }}>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={crossfader}
+                onChange={(event) => setCrossfader(Number(event.target.value))}
+                style={{ width: '100%' }}
+              />
+              <div className="status-line" style={{ marginTop: '0.35rem' }}>
+                <span className="tiny">A</span>
+                <span className="tiny">Crossfader: {crossfader}</span>
+                <span className="tiny">B</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="split-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div className="panel stack">
               <div className="status-line">
-                <h3 className="section-title">Apple Music Playlist</h3>
+                <h3 className="section-title">Apple Music (Guest Playlist)</h3>
                 <span className="badge apple-music">{appleMusicLibrary.length} tracks</span>
               </div>
               <div className="timeline-list">
@@ -541,50 +602,6 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                     </div>
                   </div>
                 )) : <p className="subtle">No Apple Music tracks loaded into this party yet.</p>}
-              </div>
-            </div>
-
-            <div className="panel stack" style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-              <p className="eyebrow">Virtual DJ Mixer</p>
-              <h3 className="section-title">Crossfader</h3>
-              <p className="subtle">Blend Deck A (Apple Music) into Deck B (Local Music).</p>
-              <div className="card stack" style={{ width: '100%', textAlign: 'left' }}>
-                <div className="status-line">
-                  <strong>Deck A</strong>
-                  <span className="badge apple-music">Apple</span>
-                </div>
-                <p className="track-title">{deckATrack?.title ?? 'Load an Apple Music track'}</p>
-                <p className="track-subtitle">{deckATrack?.artist ?? 'No track loaded'}</p>
-                <audio ref={deckAAudioRef} controls style={{ width: '100%' }}>
-                  {deckATrack?.previewUrl ? <source src={deckATrack.previewUrl} type="audio/mpeg" /> : null}
-                </audio>
-              </div>
-              <div style={{ width: '100%', padding: '0.5rem 0' }}>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={crossfader}
-                  onChange={(event) => setCrossfader(Number(event.target.value))}
-                  style={{ width: '100%' }}
-                />
-                <div className="status-line" style={{ marginTop: '0.35rem' }}>
-                  <span className="tiny">A</span>
-                  <span className="tiny">Crossfader: {crossfader}</span>
-                  <span className="tiny">B</span>
-                </div>
-              </div>
-              <div className="card stack" style={{ width: '100%', textAlign: 'left' }}>
-                <div className="status-line">
-                  <strong>Deck B</strong>
-                  <span className="badge built-in">Local</span>
-                </div>
-                <p className="track-title">{deckBTrack?.title ?? 'Load a local track'}</p>
-                <p className="track-subtitle">{deckBTrack?.artist ?? 'No track loaded'}</p>
-                <audio ref={deckBAudioRef} controls style={{ width: '100%' }}>
-                  {deckBTrack?.previewUrl ? <source src={deckBTrack.previewUrl} type="audio/mpeg" /> : null}
-                </audio>
-                {!deckBTrack?.previewUrl ? <p className="subtle">This local track has no audio preview yet. The deck is ready for local file-backed tracks.</p> : null}
               </div>
             </div>
 
