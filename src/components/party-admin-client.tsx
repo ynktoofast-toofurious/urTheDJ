@@ -40,6 +40,8 @@ type MixerTrack = {
   sourceProvider: 'apple-music' | 'catalog';
 };
 
+type SourceSelection = 'guest' | 'local';
+
 function dedupeMixerTracks(tracks: MixerTrack[]) {
   const seen = new Set<string>();
   return tracks.filter((track) => {
@@ -56,7 +58,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<'nowplaying' | 'mixer' | 'playlist' | 'pending'>('mixer');
   const [isPlaying, setIsPlaying] = useState(false);
-  const [crossfader, setCrossfader] = useState(50);
+  const [selectedSource, setSelectedSource] = useState<SourceSelection>('guest');
   const [deckATrackId, setDeckATrackId] = useState('');
   const [deckBTrackId, setDeckBTrackId] = useState('');
   const deckAAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -220,19 +222,30 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   }, [localMusicLibrary, deckBTrackId]);
 
   useEffect(() => {
-    if (deckAAudioRef.current) deckAAudioRef.current.volume = Math.max(0, Math.min(1, (100 - crossfader) / 100));
-    if (deckBAudioRef.current) deckBAudioRef.current.volume = Math.max(0, Math.min(1, crossfader / 100));
-  }, [crossfader, deckATrack?.id, deckBTrack?.id]);
+    const deckA = deckAAudioRef.current;
+    const deckB = deckBAudioRef.current;
+    if (!deckA || !deckB) return;
+
+    const guestSelected = selectedSource === 'guest';
+    deckA.volume = guestSelected ? 1 : 0;
+    deckB.volume = guestSelected ? 0 : 1;
+
+    if (guestSelected) {
+      deckB.pause();
+    } else {
+      deckA.pause();
+    }
+  }, [selectedSource, deckATrack?.id, deckBTrack?.id]);
 
   useEffect(() => {
     if (data?.session.status !== 'active') return;
-    const primaryDeck = crossfader <= 50 ? deckAAudioRef.current : deckBAudioRef.current;
+    const primaryDeck = selectedSource === 'guest' ? deckAAudioRef.current : deckBAudioRef.current;
     if (primaryDeck?.paused) {
       void primaryDeck.play().catch(() => {
         // Browser autoplay policies may block playback until direct user interaction.
       });
     }
-  }, [data?.session.status, crossfader, deckATrack?.id, deckBTrack?.id]);
+  }, [data?.session.status, selectedSource, deckATrack?.id, deckBTrack?.id]);
 
   async function postAction(action: ActionName, payload: Record<string, unknown> = {}) {
     setError('');
@@ -542,8 +555,26 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
         <div className="stack">
           <div className="panel stack">
             <p className="eyebrow">Virtual DJ Mixer</p>
-            <h3 className="section-title">Crossfader</h3>
-            <p className="subtle">Blend Deck A (Apple Music guest playlist) into Deck B (Local Music).</p>
+            <h3 className="section-title">Playback Source</h3>
+            <p className="subtle">Select one source: Guest Playlist or Local Music.</p>
+
+            <div className="status-line" style={{ gap: '0.75rem', justifyContent: 'flex-start' }}>
+              <button
+                className={`btn ${selectedSource === 'guest' ? '' : 'secondary'}`}
+                onClick={() => setSelectedSource('guest')}
+              >
+                Guest Playlist
+              </button>
+              <button
+                className={`btn ${selectedSource === 'local' ? '' : 'secondary'}`}
+                onClick={() => setSelectedSource('local')}
+              >
+                Local Music
+              </button>
+            </div>
+            <p className="subtle" style={{ fontSize: '0.78rem' }}>
+              Active source: {selectedSource === 'guest' ? 'Guest Playlist' : 'Local Music'}
+            </p>
 
             <div className="split-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <div className="card stack" style={{ width: '100%', textAlign: 'left' }}>
@@ -559,6 +590,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                   controls
                   style={{ width: '100%' }}
                   onEnded={() => {
+                    if (selectedSource !== 'guest') return;
                     if (!appleMusicLibrary.length) return;
                     const currentIndex = appleMusicLibrary.findIndex((track) => track.id === deckATrack?.id);
                     const nextTrack = appleMusicLibrary[(currentIndex + 1) % appleMusicLibrary.length];
@@ -582,6 +614,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                   controls
                   style={{ width: '100%' }}
                   onEnded={() => {
+                    if (selectedSource !== 'local') return;
                     if (!localMusicLibrary.length) return;
                     const currentIndex = localMusicLibrary.findIndex((track) => track.id === deckBTrack?.id);
                     const nextTrack = localMusicLibrary[(currentIndex + 1) % localMusicLibrary.length];
@@ -594,21 +627,6 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
               </div>
             </div>
 
-            <div style={{ width: '100%', paddingTop: '0.5rem' }}>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={crossfader}
-                onChange={(event) => setCrossfader(Number(event.target.value))}
-                style={{ width: '100%' }}
-              />
-              <div className="status-line" style={{ marginTop: '0.35rem' }}>
-                <span className="tiny">A</span>
-                <span className="tiny">Crossfader: {crossfader}</span>
-                <span className="tiny">B</span>
-              </div>
-            </div>
           </div>
 
           <div className="split-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
@@ -617,6 +635,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 <h3 className="section-title">Apple Music (Guest Playlist)</h3>
                 <span className="badge apple-music">{appleMusicLibrary.length} tracks</span>
               </div>
+              <p className="subtle" style={{ fontSize: '0.78rem' }}>This playlist auto-plays in order when party starts and Guest Playlist is selected.</p>
               <div className="timeline-list">
                 {appleMusicLibrary.length ? appleMusicLibrary.map((track) => (
                   <div className="queue-row" key={track.id}>
