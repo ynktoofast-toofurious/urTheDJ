@@ -54,7 +54,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState('');
   const [selectedSongId, setSelectedSongId] = useState('');
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<'nowplaying' | 'mixer' | 'playlist' | 'pending'>('nowplaying');
+  const [activeTab, setActiveTab] = useState<'nowplaying' | 'mixer' | 'playlist' | 'pending'>('mixer');
   const [isPlaying, setIsPlaying] = useState(false);
   const [crossfader, setCrossfader] = useState(50);
   const [deckATrackId, setDeckATrackId] = useState('');
@@ -223,6 +223,16 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
     if (deckAAudioRef.current) deckAAudioRef.current.volume = Math.max(0, Math.min(1, (100 - crossfader) / 100));
     if (deckBAudioRef.current) deckBAudioRef.current.volume = Math.max(0, Math.min(1, crossfader / 100));
   }, [crossfader, deckATrack?.id, deckBTrack?.id]);
+
+  useEffect(() => {
+    if (data?.session.status !== 'active') return;
+    const primaryDeck = crossfader <= 50 ? deckAAudioRef.current : deckBAudioRef.current;
+    if (primaryDeck?.paused) {
+      void primaryDeck.play().catch(() => {
+        // Browser autoplay policies may block playback until direct user interaction.
+      });
+    }
+  }, [data?.session.status, crossfader, deckATrack?.id, deckBTrack?.id]);
 
   async function postAction(action: ActionName, payload: Record<string, unknown> = {}) {
     setError('');
@@ -543,7 +553,18 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 </div>
                 <p className="track-title">{deckATrack?.title ?? 'Load an Apple Music track'}</p>
                 <p className="track-subtitle">{deckATrack?.artist ?? 'No track loaded'}</p>
-                <audio ref={deckAAudioRef} controls style={{ width: '100%' }}>
+                <audio
+                  ref={deckAAudioRef}
+                  key={deckATrack?.id ?? 'deck-a-empty'}
+                  controls
+                  style={{ width: '100%' }}
+                  onEnded={() => {
+                    if (!appleMusicLibrary.length) return;
+                    const currentIndex = appleMusicLibrary.findIndex((track) => track.id === deckATrack?.id);
+                    const nextTrack = appleMusicLibrary[(currentIndex + 1) % appleMusicLibrary.length];
+                    if (nextTrack) setDeckATrackId(nextTrack.id);
+                  }}
+                >
                   {deckATrack?.previewUrl ? <source src={deckATrack.previewUrl} type="audio/mpeg" /> : null}
                 </audio>
               </div>
@@ -555,7 +576,18 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                 </div>
                 <p className="track-title">{deckBTrack?.title ?? 'Load a local track'}</p>
                 <p className="track-subtitle">{deckBTrack?.artist ?? 'No track loaded'}</p>
-                <audio ref={deckBAudioRef} controls style={{ width: '100%' }}>
+                <audio
+                  ref={deckBAudioRef}
+                  key={deckBTrack?.id ?? 'deck-b-empty'}
+                  controls
+                  style={{ width: '100%' }}
+                  onEnded={() => {
+                    if (!localMusicLibrary.length) return;
+                    const currentIndex = localMusicLibrary.findIndex((track) => track.id === deckBTrack?.id);
+                    const nextTrack = localMusicLibrary[(currentIndex + 1) % localMusicLibrary.length];
+                    if (nextTrack) setDeckBTrackId(nextTrack.id);
+                  }}
+                >
                   {deckBTrack?.previewUrl ? <source src={deckBTrack.previewUrl} type="audio/mpeg" /> : null}
                 </audio>
                 {!deckBTrack?.previewUrl ? <p className="subtle">This local track has no audio preview yet. The deck is ready for local file-backed tracks.</p> : null}
@@ -596,9 +628,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                           <p className="track-subtitle">{track.artist}</p>
                         </div>
                       </div>
-                      <button className="btn secondary" disabled={!track.previewUrl} onClick={() => setDeckATrackId(track.id)}>
-                        Load A
-                      </button>
+                      <span className="badge apple-music">Guest</span>
                     </div>
                   </div>
                 )) : <p className="subtle">No Apple Music tracks loaded into this party yet.</p>}
@@ -621,9 +651,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                           <p className="track-subtitle">{track.artist}</p>
                         </div>
                       </div>
-                      <button className="btn secondary" onClick={() => setDeckBTrackId(track.id)}>
-                        Load B
-                      </button>
+                      <span className="badge built-in">Local</span>
                     </div>
                   </div>
                 )) : <p className="subtle">No local tracks available.</p>}
