@@ -62,12 +62,14 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [selectedSource, setSelectedSource] = useState<SourceSelection>('guest');
   const [appleConnectState, setAppleConnectState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [appleConnectMessage, setAppleConnectMessage] = useState('');
+  const [uploadedLocalTracks, setUploadedLocalTracks] = useState<MixerTrack[]>([]);
   const [deckATrackId, setDeckATrackId] = useState('');
   const [deckBTrackId, setDeckBTrackId] = useState('');
   const deckAAudioRef = useRef<HTMLAudioElement | null>(null);
   const deckBAudioRef = useRef<HTMLAudioElement | null>(null);
   const appleMusicRef = useRef<any>(null);
   const lastAppleQueueKeyRef = useRef('');
+  const uploadedTracksRef = useRef<MixerTrack[]>([]);
 
   // DJ song search
   const [djQuery, setDjQuery] = useState('');
@@ -78,6 +80,48 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   // Guest list management
   const [newGuestName, setNewGuestName] = useState('');
   const [guestListPending, startGuestListTransition] = useTransition();
+
+  function cleanupTrackUrl(track: MixerTrack) {
+    if (track.id.startsWith('local-upload-') && track.previewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(track.previewUrl);
+    }
+  }
+
+  function addLocalFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList).filter((file) => file.type.startsWith('audio/'));
+
+    if (files.length === 0) {
+      setError('Please upload audio files only (mp3, wav, m4a, etc).');
+      return;
+    }
+
+    const now = Date.now();
+    const tracks = files.map((file, index) => {
+      const objectUrl = URL.createObjectURL(file);
+      const cleanName = file.name.replace(/\.[^/.]+$/, '');
+      return {
+        id: `local-upload-${now}-${index}-${file.name}`,
+        title: cleanName || file.name,
+        artist: 'Local File',
+        artworkUrl: undefined,
+        previewUrl: objectUrl,
+        sourceProvider: 'catalog' as const
+      } satisfies MixerTrack;
+    });
+
+    setUploadedLocalTracks((current) => dedupeMixerTracks([...tracks, ...current]));
+    setDeckBTrackId((current) => current || tracks[0]?.id || current);
+    setError('');
+  }
+
+  function clearUploadedLocalFiles() {
+    setUploadedLocalTracks((current) => {
+      current.forEach((track) => cleanupTrackUrl(track));
+      return [];
+    });
+    setDeckBTrackId('');
+  }
 
   async function loadDashboard() {
     try {
@@ -198,9 +242,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
         sourceProvider: 'catalog' as const
       }));
 
-    if (queueLocal.length > 0) return dedupeMixerTracks(queueLocal);
-
-    return catalog.map((track) => ({
+    const fallbackLocal = catalog.map((track) => ({
       id: track.appleMusicId ?? `${track.songTitle}-${track.artistName}`,
       appleMusicId: track.appleMusicId,
       title: track.songTitle,
@@ -209,7 +251,10 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
       previewUrl: track.previewUrl,
       sourceProvider: 'catalog' as const
     }));
-  }, [data]);
+
+    const baseLocal = queueLocal.length > 0 ? dedupeMixerTracks(queueLocal) : fallbackLocal;
+    return dedupeMixerTracks([...uploadedLocalTracks, ...baseLocal]);
+  }, [data, uploadedLocalTracks]);
 
   const guestAppleMusicIds = useMemo(
     () => appleMusicLibrary.map((track) => track.appleMusicId).filter((id): id is string => Boolean(id)),
@@ -287,6 +332,16 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     if (!deckBTrackId && localMusicLibrary[0]) setDeckBTrackId(localMusicLibrary[0].id);
   }, [localMusicLibrary, deckBTrackId]);
+
+  useEffect(() => {
+    uploadedTracksRef.current = uploadedLocalTracks;
+  }, [uploadedLocalTracks]);
+
+  useEffect(() => {
+    return () => {
+      uploadedTracksRef.current.forEach((track) => cleanupTrackUrl(track));
+    };
+  }, []);
 
   useEffect(() => {
     const deckA = deckAAudioRef.current;
@@ -757,6 +812,26 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
               <div className="status-line">
                 <h3 className="section-title">Local Music</h3>
                 <span className="badge built-in">{localMusicLibrary.length} tracks</span>
+              </div>
+              <div className="card stack" style={{ gap: '0.5rem' }}>
+                <strong style={{ fontSize: '0.9rem' }}>Add Local Files</strong>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  multiple
+                  onChange={(event) => {
+                    addLocalFiles(event.target.files);
+                    event.currentTarget.value = '';
+                  }}
+                />
+                <div className="status-line" style={{ justifyContent: 'space-between' }}>
+                  <p className="subtle" style={{ fontSize: '0.75rem' }}>{uploadedLocalTracks.length} uploaded local track(s)</p>
+                  {uploadedLocalTracks.length > 0 ? (
+                    <button className="btn secondary" style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }} onClick={clearUploadedLocalFiles}>
+                      Clear Uploads
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <div className="timeline-list">
                 {localMusicLibrary.length ? localMusicLibrary.map((track) => (
