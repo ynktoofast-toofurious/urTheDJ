@@ -33,6 +33,7 @@ function ScoreChip({ request }: { request: SongRequest }) {
 
 type MixerTrack = {
   id: string;
+  appleMusicId?: string;
   title: string;
   artist: string;
   artworkUrl?: string;
@@ -59,10 +60,14 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
   const [activeTab, setActiveTab] = useState<'nowplaying' | 'mixer' | 'playlist' | 'pending'>('mixer');
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedSource, setSelectedSource] = useState<SourceSelection>('guest');
+  const [appleConnectState, setAppleConnectState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+  const [appleConnectMessage, setAppleConnectMessage] = useState('');
   const [deckATrackId, setDeckATrackId] = useState('');
   const [deckBTrackId, setDeckBTrackId] = useState('');
   const deckAAudioRef = useRef<HTMLAudioElement | null>(null);
   const deckBAudioRef = useRef<HTMLAudioElement | null>(null);
+  const appleMusicRef = useRef<any>(null);
+  const lastAppleQueueKeyRef = useRef('');
 
   // DJ song search
   const [djQuery, setDjQuery] = useState('');
@@ -168,6 +173,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
       .filter((track) => track.sourceProvider === 'apple-music')
       .map((track) => ({
         id: track.requestId,
+        appleMusicId: track.appleMusicId,
         title: track.songTitle,
         artist: track.artistName,
         artworkUrl: track.artworkUrl,
@@ -184,6 +190,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
       .filter((track) => track.sourceProvider === 'catalog')
       .map((track) => ({
         id: track.requestId,
+        appleMusicId: track.appleMusicId,
         title: track.songTitle,
         artist: track.artistName,
         artworkUrl: track.artworkUrl,
@@ -195,6 +202,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
     return catalog.map((track) => ({
       id: track.appleMusicId ?? `${track.songTitle}-${track.artistName}`,
+      appleMusicId: track.appleMusicId,
       title: track.songTitle,
       artist: track.artistName,
       artworkUrl: track.artworkUrl,
@@ -202,6 +210,65 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
       sourceProvider: 'catalog' as const
     }));
   }, [data]);
+
+  const guestAppleMusicIds = useMemo(
+    () => appleMusicLibrary.map((track) => track.appleMusicId).filter((id): id is string => Boolean(id)),
+    [appleMusicLibrary]
+  );
+
+  async function connectAppleMusic() {
+    const developerToken = process.env.NEXT_PUBLIC_APPLE_MUSIC_DEVELOPER_TOKEN;
+    if (!developerToken) {
+      setAppleConnectMessage('Missing NEXT_PUBLIC_APPLE_MUSIC_DEVELOPER_TOKEN. Add it in Vercel and redeploy.');
+      return;
+    }
+
+    setAppleConnectState('connecting');
+    setAppleConnectMessage('');
+
+    try {
+      if (!(window as any).MusicKit) {
+        await new Promise<void>((resolve, reject) => {
+          const existing = document.querySelector('script[data-apple-musickit="true"]') as HTMLScriptElement | null;
+          if (existing) {
+            existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('error', () => reject(new Error('Unable to load MusicKit script.')), { once: true });
+            return;
+          }
+
+          const script = document.createElement('script');
+          script.src = 'https://js-cdn.music.apple.com/musickit/v3/musickit.js';
+          script.async = true;
+          script.dataset.appleMusickit = 'true';
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error('Unable to load MusicKit script.'));
+          document.head.appendChild(script);
+        });
+      }
+
+      const MusicKit = (window as any).MusicKit;
+      if (!MusicKit) throw new Error('MusicKit is unavailable in this browser.');
+
+      MusicKit.configure({
+        developerToken,
+        app: {
+          name: 'urTheDJ',
+          build: '1.0.0'
+        }
+      });
+
+      const music = MusicKit.getInstance();
+      const userToken = await music.authorize();
+      if (!userToken) throw new Error('Apple Music sign in was cancelled.');
+
+      appleMusicRef.current = music;
+      setAppleConnectState('connected');
+      setAppleConnectMessage('Apple Music connected. Full-song playback is enabled for Guest Playlist.');
+    } catch (connectError) {
+      setAppleConnectState('disconnected');
+      setAppleConnectMessage(connectError instanceof Error ? connectError.message : 'Failed to connect Apple Music.');
+    }
+  }
 
   const deckATrack = useMemo(
     () => appleMusicLibrary.find((track) => track.id === deckATrackId) ?? appleMusicLibrary[0],
@@ -234,18 +301,41 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
       deckB.pause();
     } else {
       deckA.pause();
+      if (appleMusicRef.current?.pause) {
+        void appleMusicRef.current.pause();
+      }
     }
   }, [selectedSource, deckATrack?.id, deckBTrack?.id]);
 
   useEffect(() => {
     if (data?.session.status !== 'active') return;
+
+    if (selectedSource === 'guest' && appleConnectState === 'connected' && guestAppleMusicIds.length > 0 && appleMusicRef.current) {
+      deckAAudioRef.current?.pause();
+      deckBAudioRef.current?.pause();
+
+      const queueKey = guestAppleMusicIds.join(',');
+      void (async () => {
+        try {
+          if (lastAppleQueueKeyRef.current !== queueKey) {
+            await appleMusicRef.current.setQueue({ songs: guestAppleMusicIds });
+            lastAppleQueueKeyRef.current = queueKey;
+          }
+          await appleMusicRef.current.play();
+        } catch {
+          // If full-song playback fails, browser audio previews remain available as fallback.
+        }
+      })();
+      return;
+    }
+
     const primaryDeck = selectedSource === 'guest' ? deckAAudioRef.current : deckBAudioRef.current;
     if (primaryDeck?.paused) {
       void primaryDeck.play().catch(() => {
         // Browser autoplay policies may block playback until direct user interaction.
       });
     }
-  }, [data?.session.status, selectedSource, deckATrack?.id, deckBTrack?.id]);
+  }, [data?.session.status, selectedSource, appleConnectState, guestAppleMusicIds, deckATrack?.id, deckBTrack?.id]);
 
   async function postAction(action: ActionName, payload: Record<string, unknown> = {}) {
     setError('');
@@ -571,12 +661,20 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
               >
                 Local Music
               </button>
+              <button
+                className={`btn ${appleConnectState === 'connected' ? 'secondary' : ''}`}
+                disabled={appleConnectState === 'connecting'}
+                onClick={() => void connectAppleMusic()}
+              >
+                {appleConnectState === 'connected' ? 'Apple Account Connected' : appleConnectState === 'connecting' ? 'Connecting Apple Account…' : 'Connect Apple Account'}
+              </button>
             </div>
             <p className="subtle" style={{ fontSize: '0.78rem' }}>
               Active source: {selectedSource === 'guest' ? 'Guest Playlist' : 'Local Music'}
             </p>
+            {appleConnectMessage ? <p className="subtle" style={{ fontSize: '0.78rem' }}>{appleConnectMessage}</p> : null}
 
-            <div className="split-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <div className="split-grid" style={{ gridTemplateColumns: '1.2fr 1fr' }}>
               <div className="card stack" style={{ width: '100%', textAlign: 'left' }}>
                 <div className="status-line">
                   <strong>Deck A</strong>
@@ -590,6 +688,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
                   controls
                   style={{ width: '100%' }}
                   onEnded={() => {
+                    if (appleConnectState === 'connected') return;
                     if (selectedSource !== 'guest') return;
                     if (!appleMusicLibrary.length) return;
                     const currentIndex = appleMusicLibrary.findIndex((track) => track.id === deckATrack?.id);
@@ -629,7 +728,7 @@ export function PartyAdminClient({ sessionId }: { sessionId: string }) {
 
           </div>
 
-          <div className="split-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div className="split-grid" style={{ gridTemplateColumns: '1.2fr 1fr' }}>
             <div className="panel stack">
               <div className="status-line">
                 <h3 className="section-title">Apple Music (Guest Playlist)</h3>
